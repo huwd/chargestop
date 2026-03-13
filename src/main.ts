@@ -7,6 +7,7 @@ import { downsampleRoute, minDistToRouteKm, routeBBox, type LatLon } from './geo
 import { overpass, buildChargerQuery, buildFoodQuery } from './overpass.ts'
 import { isFastCharger, isIndieFood, getChargerSockets, type OsmElement } from './filters.ts'
 import { setStatus, buildChargerCard, renderFoodList, initDrawer } from './ui.ts'
+import { parseUrlParams, buildUrlSearch } from './params.ts'
 
 // ─── DOM refs ────────────────────────────────────────────────────────────────
 
@@ -154,6 +155,7 @@ async function runPlan(): Promise<void> {
   planBtn.disabled = true
   clearAll()
   resultsDiv.innerHTML = ''
+  history.replaceState(null, '', buildUrlSearch(fromStr, toStr, detourKm, foodRadiusM))
 
   try {
     status('Geocoding locations…')
@@ -228,3 +230,18 @@ planBtn.addEventListener('click', () => {
 })
 
 sidebar.addEventListener('transitionend', () => map.invalidateSize())
+
+// ─── URL params ───────────────────────────────────────────────────────────────
+
+const urlParams = parseUrlParams(window.location.search)
+if (urlParams.from) fromInput.value = urlParams.from
+if (urlParams.to) toInput.value = urlParams.to
+if (urlParams.chargerDistance !== undefined) {
+  detourSlider.value = String(urlParams.chargerDistance)
+  detourVal.textContent = String(urlParams.chargerDistance)
+}
+if (urlParams.foodRadius !== undefined) {
+  foodSlider.value = String(urlParams.foodRadius)
+  foodVal.textContent = String(urlParams.foodRadius)
+}
+if (urlParams.from && urlParams.to) void runPlan()
