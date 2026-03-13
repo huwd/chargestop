@@ -48,6 +48,39 @@ export interface BBox {
 }
 
 /**
+ * Bearing in degrees (0–360) from point a to point b.
+ */
+export function bearingDeg(a: LatLon, b: LatLon): number {
+  const dLon = ((b[1] - a[1]) * Math.PI) / 180
+  const lat1 = (a[0] * Math.PI) / 180
+  const lat2 = (b[0] * Math.PI) / 180
+  const y = Math.sin(dLon) * Math.cos(lat2)
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon)
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360
+}
+
+/**
+ * Point at `distKm` from `origin` along `bearDeg`.
+ */
+export function destinationPoint(origin: LatLon, bearDeg: number, distKm: number): LatLon {
+  const R = 6371
+  const d = distKm / R
+  const lat1 = (origin[0] * Math.PI) / 180
+  const lon1 = (origin[1] * Math.PI) / 180
+  const brng = (bearDeg * Math.PI) / 180
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(brng),
+  )
+  const lon2 =
+    lon1 +
+    Math.atan2(
+      Math.sin(brng) * Math.sin(d) * Math.cos(lat1),
+      Math.cos(d) - Math.sin(lat1) * Math.sin(lat2),
+    )
+  return [(lat2 * 180) / Math.PI, (lon2 * 180) / Math.PI]
+}
+
+/**
  * Compute a bounding box from route coords with a padding of `padKm` kilometres.
  */
 export function routeBBox(coords: LatLon[], padKm: number): BBox {

@@ -5,6 +5,8 @@ export interface RouteParams {
   to: string
   chargerDistance: number
   foodRadius: number
+  vehicleId: string
+  chargePercent: number
 }
 
 const PLACE_MAX_LEN = 100
@@ -14,6 +16,13 @@ export function sanitisePlace(raw: string): string | null {
   if (!s || s.length > PLACE_MAX_LEN) return null
   if (/<|>|javascript:/i.test(s)) return null
   return s
+}
+
+/** Vehicle IDs are lowercase alphanumeric + hyphens only, max 60 chars. */
+export function sanitiseVehicleId(raw: string): string | null {
+  if (!raw || raw.length > 60) return null
+  if (!/^[a-z0-9-]+$/.test(raw)) return null
+  return raw
 }
 
 export function parseNumericParam(
@@ -56,6 +65,18 @@ export function parseUrlParams(search: string): Partial<RouteParams> {
     if (n !== null) result.foodRadius = n
   }
 
+  const vehicle = p.get('vehicle')
+  if (vehicle !== null) {
+    const s = sanitiseVehicleId(vehicle)
+    if (s) result.vehicleId = s
+  }
+
+  const charge = p.get('charge')
+  if (charge !== null) {
+    const n = parseNumericParam(charge, 10, 100, 5)
+    if (n !== null) result.chargePercent = n
+  }
+
   return result
 }
 
@@ -64,12 +85,16 @@ export function buildUrlSearch(
   to: string,
   chargerDistance: number,
   foodRadius: number,
+  vehicleId?: string,
+  chargePercent?: number,
 ): string {
-  const p = new URLSearchParams({
+  const params: Record<string, string> = {
     from,
     to,
     charger_distance: String(chargerDistance),
     food_radius: String(foodRadius),
-  })
-  return '?' + p.toString()
+  }
+  if (vehicleId) params.vehicle = vehicleId
+  if (chargePercent !== undefined) params.charge = String(chargePercent)
+  return '?' + new URLSearchParams(params).toString()
 }

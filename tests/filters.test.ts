@@ -5,6 +5,7 @@ import {
   isFastCharger,
   isIndieFood,
   formatCuisine,
+  matchesVehiclePort,
   type OsmElement,
   type OsmTags,
 } from '../src/filters.ts'
@@ -123,6 +124,37 @@ describe('isIndieFood', () => {
 
   it('returns true for indie café with cuisine tag', () => {
     expect(isIndieFood(el({ name: 'River Café', amenity: 'cafe', cuisine: 'coffee' }))).toBe(true)
+  })
+})
+
+describe('matchesVehiclePort', () => {
+  it('CCS vehicle matches a charger with type2_combo socket', () => {
+    expect(matchesVehiclePort(el({ 'socket:type2_combo': '2' }), 'CCS')).toBe(true)
+  })
+
+  it('CCS vehicle does not match a CHAdeMO-only charger', () => {
+    expect(matchesVehiclePort(el({ 'socket:chademo': '1' }), 'CCS')).toBe(false)
+  })
+
+  it('CHAdeMO vehicle matches a charger with chademo socket', () => {
+    expect(matchesVehiclePort(el({ 'socket:chademo': '1' }), 'CHAdeMO')).toBe(true)
+  })
+
+  it('CHAdeMO vehicle does not match a CCS-only charger', () => {
+    expect(matchesVehiclePort(el({ 'socket:type2_combo': '2' }), 'CHAdeMO')).toBe(false)
+  })
+
+  it('Tesla vehicle matches a charger with tesla_supercharger socket', () => {
+    expect(matchesVehiclePort(el({ 'socket:tesla_supercharger': '8' }), 'Tesla')).toBe(true)
+  })
+
+  it('Tesla vehicle also matches a CCS charger (UK Teslas use CCS at public chargers)', () => {
+    expect(matchesVehiclePort(el({ 'socket:type2_combo': '4' }), 'Tesla')).toBe(true)
+  })
+
+  it('CCS+CHAdeMO vehicle matches either socket type', () => {
+    expect(matchesVehiclePort(el({ 'socket:type2_combo': '2' }), 'CCS+CHAdeMO')).toBe(true)
+    expect(matchesVehiclePort(el({ 'socket:chademo': '1' }), 'CCS+CHAdeMO')).toBe(true)
   })
 })
 

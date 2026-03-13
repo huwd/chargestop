@@ -3,6 +3,22 @@
 import type { OsmElement, SocketType } from './filters.ts'
 import { formatCuisine } from './filters.ts'
 import { haversineM, type LatLon } from './geo.ts'
+import { vehiclesByMake } from './data/vehicles.ts'
+
+export function populateVehiclePicker(selectEl: HTMLSelectElement): void {
+  const makes = vehiclesByMake()
+  for (const [make, vehicles] of makes) {
+    const group = document.createElement('optgroup')
+    group.label = make
+    for (const v of vehicles) {
+      const opt = document.createElement('option')
+      opt.value = v.id
+      opt.textContent = `${v.model} ${v.variant} (${v.year}) · ${v.wltpRangeKm}km · ${v.maxChargeKw}kW`
+      group.appendChild(opt)
+    }
+    selectEl.appendChild(group)
+  }
+}
 
 // ─── Status bar ──────────────────────────────────────────────────────────────
 

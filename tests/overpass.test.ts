@@ -11,6 +11,38 @@ describe('buildChargerQuery', () => {
     expect(q).toContain('52')
     expect(q).toContain('charging_station')
   })
+
+  it('adds CCS socket tag when portType is CCS', () => {
+    const bbox: BBox = { south: 50.0, west: -5.0, north: 52.0, east: 0.0 }
+    const q = buildChargerQuery(bbox, 'CCS')
+    expect(q).toContain('socket:type2_combo')
+  })
+
+  it('adds CHAdeMO socket tag when portType is CHAdeMO', () => {
+    const bbox: BBox = { south: 50.0, west: -5.0, north: 52.0, east: 0.0 }
+    const q = buildChargerQuery(bbox, 'CHAdeMO')
+    expect(q).toContain('socket:chademo')
+  })
+
+  it('queries both Tesla and CCS sockets for Tesla portType', () => {
+    const bbox: BBox = { south: 50.0, west: -5.0, north: 52.0, east: 0.0 }
+    const q = buildChargerQuery(bbox, 'Tesla')
+    expect(q).toContain('socket:tesla_supercharger')
+    expect(q).toContain('socket:type2_combo')
+  })
+
+  it('queries both CCS and CHAdeMO for CCS+CHAdeMO portType', () => {
+    const bbox: BBox = { south: 50.0, west: -5.0, north: 52.0, east: 0.0 }
+    const q = buildChargerQuery(bbox, 'CCS+CHAdeMO')
+    expect(q).toContain('socket:type2_combo')
+    expect(q).toContain('socket:chademo')
+  })
+
+  it('omits socket filter when no portType given', () => {
+    const bbox: BBox = { south: 50.0, west: -5.0, north: 52.0, east: 0.0 }
+    const q = buildChargerQuery(bbox)
+    expect(q).not.toContain('socket:')
+  })
 })
 
 describe('buildFoodQuery', () => {

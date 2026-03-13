@@ -60,6 +60,26 @@ export function isIndieFood(el: OsmElement): boolean {
   return true
 }
 
+import type { ChargePortType } from './data/vehicles.ts'
+
+/**
+ * Returns true if the charger has at least one socket compatible with the vehicle's port type.
+ * Tesla vehicles accept both Supercharger and CCS sockets (all UK Teslas support CCS at public chargers).
+ */
+export function matchesVehiclePort(charger: OsmElement, portType: ChargePortType): boolean {
+  const sockets = getChargerSockets(charger.tags)
+  switch (portType) {
+    case 'CCS':
+      return sockets.includes('CCS')
+    case 'CHAdeMO':
+      return sockets.includes('CHAdeMO')
+    case 'Tesla':
+      return sockets.includes('Tesla') || sockets.includes('CCS')
+    case 'CCS+CHAdeMO':
+      return sockets.includes('CCS') || sockets.includes('CHAdeMO')
+  }
+}
+
 export function formatCuisine(tags: OsmTags): string {
   const c = tags.cuisine ?? ''
   return c ? c.replace(/_/g, ' ').replace(/;/g, ' · ') : ''

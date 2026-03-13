@@ -30,6 +30,13 @@
       </div>
     </div>
 
+    <div class="field">
+      <label for="vehicle-select">Vehicle</label>
+      <select id="vehicle-select">
+        <option value="">No vehicle selected</option>
+      </select>
+    </div>
+
     <div id="sliders-row">
       <div class="slider-row">
         <label for="detour-slider">Detour: <span id="detour-val">5</span>km</label>
@@ -38,6 +45,10 @@
       <div class="slider-row">
         <label for="food-slider">Food within: <span id="food-val">150</span>m</label>
         <input type="range" id="food-slider" min="50" max="600" value="150" step="50">
+      </div>
+      <div class="slider-row" id="charge-row">
+        <label for="charge-slider">Starting charge: <span id="charge-val">80</span>%</label>
+        <input type="range" id="charge-slider" min="10" max="100" value="80" step="5">
       </div>
     </div>
 

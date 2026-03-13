@@ -2,6 +2,7 @@
 
 import type { BBox } from './geo.ts'
 import type { OsmElement } from './filters.ts'
+import type { ChargePortType } from './data/vehicles.ts'
 
 export const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
@@ -39,11 +40,28 @@ export async function overpass(
   throw new Error(`All Overpass endpoints failed. Last: ${lastErr.message}`)
 }
 
-export function buildChargerQuery(bbox: BBox): string {
+const SOCKET_TAGS: Record<ChargePortType, string[]> = {
+  CCS: ['socket:type2_combo'],
+  CHAdeMO: ['socket:chademo'],
+  Tesla: ['socket:tesla_supercharger', 'socket:type2_combo'],
+  'CCS+CHAdeMO': ['socket:type2_combo', 'socket:chademo'],
+}
+
+export function buildChargerQuery(bbox: BBox, portType?: ChargePortType): string {
   const { south, west, north, east } = bbox
-  return `[out:json][timeout:40];
-node["amenity"="charging_station"](${south},${west},${north},${east});
-out body;`
+  const b = `${south},${west},${north},${east}`
+
+  if (!portType) {
+    return `[out:json][timeout:40];\nnode["amenity"="charging_station"](${b});\nout body;`
+  }
+
+  const tags = SOCKET_TAGS[portType]
+  if (tags.length === 1) {
+    return `[out:json][timeout:40];\nnode["amenity"="charging_station"]["${tags[0]}"](${b});\nout body;`
+  }
+
+  const nodes = tags.map((t) => `  node["amenity"="charging_station"]["${t}"](${b});`).join('\n')
+  return `[out:json][timeout:40];\n(\n${nodes}\n);\nout body;`
 }
 
 export function buildFoodQuery(lat: number, lon: number, radiusM: number): string {
