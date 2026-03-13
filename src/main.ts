@@ -1,13 +1,32 @@
 /** Orchestration: wires UI events to routing, Overpass, and map. */
 
 import L from 'leaflet'
-import { initMap, makeChargerMarker, makeFoodMarker } from './map.ts'
+import { initMap, makeChargerMarker, makeFoodMarker, buildRangeLayer } from './map.ts'
 import { geocode, getRoute } from './routing.ts'
 import { downsampleRoute, minDistToRouteKm, routeBBox, type LatLon } from './geo.ts'
 import { overpass, buildChargerQuery, buildFoodQuery } from './overpass.ts'
-import { isFastCharger, isIndieFood, getChargerSockets, type OsmElement } from './filters.ts'
-import { setStatus, buildChargerCard, renderFoodList, initDrawer } from './ui.ts'
+import {
+  isFastCharger,
+  isIndieFood,
+  getChargerSockets,
+  matchesVehiclePort,
+  type OsmElement,
+} from './filters.ts'
+import {
+  setStatus,
+  buildChargerCard,
+  renderFoodList,
+  initDrawer,
+  populateVehiclePicker,
+} from './ui.ts'
 import { parseUrlParams, buildUrlSearch } from './params.ts'
+import { findVehicle, type Vehicle } from './data/vehicles.ts'
+import {
+  effectiveRangeKm,
+  cumulativeDistancesKm,
+  coloredRouteSegments,
+  computeTerminator,
+} from './range.ts'
 
 // ─── DOM refs ────────────────────────────────────────────────────────────────
 
@@ -17,6 +36,10 @@ const detourSlider = document.getElementById('detour-slider') as HTMLInputElemen
 const detourVal = document.getElementById('detour-val') as HTMLElement
 const foodSlider = document.getElementById('food-slider') as HTMLInputElement
 const foodVal = document.getElementById('food-val') as HTMLElement
+const chargeSlider = document.getElementById('charge-slider') as HTMLInputElement
+const chargeVal = document.getElementById('charge-val') as HTMLElement
+const chargeRow = document.getElementById('charge-row') as HTMLElement
+const vehicleSelect = document.getElementById('vehicle-select') as HTMLSelectElement
 const planBtn = document.getElementById('plan-btn') as HTMLButtonElement
 const statusMsg = document.getElementById('status-msg') as HTMLElement
 const statusDot = document.getElementById('status-dot') as HTMLElement
@@ -28,10 +51,27 @@ const sidebarHeader = document.getElementById('sidebar-header') as HTMLElement
 const status = (msg: string, state: Parameters<typeof setStatus>[3] = 'active'): void =>
   setStatus(statusMsg, statusDot, msg, state)
 
+// ─── Vehicle picker ───────────────────────────────────────────────────────────
+
+populateVehiclePicker(vehicleSelect)
+
+function selectedVehicle(): Vehicle | null {
+  const id = vehicleSelect.value
+  return id ? (findVehicle(id) ?? null) : null
+}
+
+vehicleSelect.addEventListener('change', () => {
+  const v = selectedVehicle()
+  chargeRow.classList.toggle('visible', v !== null)
+  if (v) localStorage.setItem('chargestop_vehicle', v.id)
+  else localStorage.removeItem('chargestop_vehicle')
+})
+
 // ─── Map state ────────────────────────────────────────────────────────────────
 
 const map = initMap('map')
 let routeLayer: L.Polyline | null = null
+let rangeLayer: L.FeatureGroup | null = null
 let chargerMarkers: L.Marker[] = []
 let foodMarkers: L.Marker[] = []
 
@@ -45,6 +85,10 @@ function clearAll(): void {
     map.removeLayer(routeLayer)
     routeLayer = null
   }
+  if (rangeLayer) {
+    map.removeLayer(rangeLayer)
+    rangeLayer = null
+  }
   chargerMarkers.forEach((m) => map.removeLayer(m))
   chargerMarkers = []
   clearFoodMarkers()
@@ -57,6 +101,9 @@ detourSlider.addEventListener('input', () => {
 })
 foodSlider.addEventListener('input', () => {
   foodVal.textContent = foodSlider.value
+})
+chargeSlider.addEventListener('input', () => {
+  chargeVal.textContent = chargeSlider.value
 })
 
 // ─── Food loader (per charger) ────────────────────────────────────────────────
@@ -151,11 +198,17 @@ async function runPlan(): Promise<void> {
   const toStr = toInput.value.trim()
   const detourKm = parseFloat(detourSlider.value)
   const foodRadiusM = parseFloat(foodSlider.value)
+  const vehicle = selectedVehicle()
+  const chargePercent = parseInt(chargeSlider.value, 10)
 
   planBtn.disabled = true
   clearAll()
   resultsDiv.innerHTML = ''
-  history.replaceState(null, '', buildUrlSearch(fromStr, toStr, detourKm, foodRadiusM))
+  history.replaceState(
+    null,
+    '',
+    buildUrlSearch(fromStr, toStr, detourKm, foodRadiusM, vehicle?.id, chargePercent),
+  )
 
   try {
     status('Geocoding locations…')
@@ -165,17 +218,35 @@ async function runPlan(): Promise<void> {
     const routeCoords = await getRoute(fromCoord, toCoord)
     const routeSampled = downsampleRoute(routeCoords, 400)
 
-    routeLayer = L.polyline(routeCoords as LatLon[], { color: '#f0c040', weight: 3, opacity: 0.75 })
-    routeLayer.addTo(map)
-    map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] })
+    // Draw route — colored by charge level if a vehicle is selected, plain yellow otherwise
+    if (vehicle) {
+      const rangeKm = effectiveRangeKm(vehicle, chargePercent)
+      const cumDist = cumulativeDistancesKm(routeCoords)
+      const segments = coloredRouteSegments(routeCoords, cumDist, rangeKm)
+      const terminator = computeTerminator(routeCoords, cumDist, rangeKm)
+      rangeLayer = buildRangeLayer(segments, terminator)
+      rangeLayer.addTo(map)
+      map.fitBounds(rangeLayer.getBounds(), { padding: [50, 50] })
+    } else {
+      routeLayer = L.polyline(routeCoords as LatLon[], {
+        color: '#f0c040',
+        weight: 3,
+        opacity: 0.75,
+      })
+      routeLayer.addTo(map)
+      map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] })
+    }
 
     status('Querying OSM for charging stations…')
     const bbox = routeBBox(routeCoords, detourKm)
-    const chargerData = await overpass(buildChargerQuery(bbox))
+    const chargerData = await overpass(buildChargerQuery(bbox, vehicle?.chargePortType))
 
-    const nearbyChargers = chargerData.elements.filter(
+    let nearbyChargers = chargerData.elements.filter(
       (c) => minDistToRouteKm([c.lat, c.lon], routeSampled) <= detourKm,
     )
+    if (vehicle) {
+      nearbyChargers = nearbyChargers.filter((c) => matchesVehiclePort(c, vehicle.chargePortType))
+    }
     const fastOnly = nearbyChargers.filter((c) => isFastCharger(c.tags))
     const displayChargers = fastOnly.length > 0 ? fastOnly : nearbyChargers
 
@@ -190,9 +261,12 @@ async function runPlan(): Promise<void> {
         ? `${displayChargers.length} fast charger${displayChargers.length !== 1 ? 's' : ''} found`
         : `${displayChargers.length} charger${displayChargers.length !== 1 ? 's' : ''} (slow) found`
 
+    const vehicleLabel = vehicle
+      ? ` · ${vehicle.make} ${vehicle.model} · ${effectiveRangeKm(vehicle, chargePercent).toFixed(0)}km range`
+      : ''
     status(label + ' — click any to find food', 'ok')
 
-    resultsDiv.innerHTML = `<div class="section-label" style="margin-bottom:10px">${label} · ${detourKm}km detour · food within ${foodRadiusM}m</div>`
+    resultsDiv.innerHTML = `<div class="section-label" style="margin-bottom:10px">${label}${vehicleLabel} · ${detourKm}km detour · food within ${foodRadiusM}m</div>`
 
     displayChargers.forEach((c) => {
       const name = c.tags.name ?? c.tags.operator ?? 'Charging Station'
@@ -231,7 +305,7 @@ planBtn.addEventListener('click', () => {
 
 sidebar.addEventListener('transitionend', () => map.invalidateSize())
 
-// ─── URL params ───────────────────────────────────────────────────────────────
+// ─── URL params + localStorage ────────────────────────────────────────────────
 
 const urlParams = parseUrlParams(window.location.search)
 if (urlParams.from) fromInput.value = urlParams.from
@@ -244,4 +318,16 @@ if (urlParams.foodRadius !== undefined) {
   foodSlider.value = String(urlParams.foodRadius)
   foodVal.textContent = String(urlParams.foodRadius)
 }
+
+// Vehicle: URL param takes precedence over localStorage
+const savedVehicleId = urlParams.vehicleId ?? localStorage.getItem('chargestop_vehicle') ?? ''
+if (savedVehicleId) {
+  vehicleSelect.value = savedVehicleId
+  vehicleSelect.dispatchEvent(new Event('change'))
+}
+if (urlParams.chargePercent !== undefined) {
+  chargeSlider.value = String(urlParams.chargePercent)
+  chargeVal.textContent = String(urlParams.chargePercent)
+}
+
 if (urlParams.from && urlParams.to) void runPlan()

@@ -42,6 +42,35 @@ const FOOD_CLASSES: Record<FoodAmenity, string> = {
   restaurant: 'marker-food-restaurant',
 }
 
+export function buildRangeLayer(
+  segments: import('./range.ts').RouteSegment[],
+  terminator: import('./range.ts').TerminatorLine | null,
+): L.FeatureGroup {
+  const layers: L.Layer[] = segments.map((seg) =>
+    L.polyline(seg.coords as L.LatLngExpression[], { color: seg.color, weight: 4, opacity: 0.9 }),
+  )
+  if (terminator) {
+    layers.push(
+      L.polyline(terminator.ends as L.LatLngExpression[], {
+        color: '#ef4444',
+        weight: 4,
+        opacity: 1,
+      }),
+    )
+    layers.push(
+      L.marker(terminator.point as L.LatLngExpression, {
+        icon: L.divIcon({
+          html: '<div class="range-limit-label">⚡ range limit</div>',
+          className: '',
+          iconSize: [110, 22],
+          iconAnchor: [55, 28],
+        }),
+      }),
+    )
+  }
+  return L.featureGroup(layers)
+}
+
 export function makeFoodMarker(lat: number, lon: number, amenity: string): L.Marker {
   const a = amenity as FoodAmenity
   const emoji = FOOD_EMOJIS[a] ?? '🍴'

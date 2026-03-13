@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { sanitisePlace, parseNumericParam, parseUrlParams, buildUrlSearch } from '../src/params.ts'
+import {
+  sanitisePlace,
+  parseNumericParam,
+  parseUrlParams,
+  buildUrlSearch,
+  sanitiseVehicleId,
+} from '../src/params.ts'
 
 describe('sanitisePlace', () => {
   it('returns trimmed string for valid input', () => {
@@ -108,6 +114,44 @@ describe('parseUrlParams', () => {
   })
 })
 
+describe('sanitiseVehicleId', () => {
+  it('accepts a valid vehicle id', () => {
+    expect(sanitiseVehicleId('tesla-model-3-lr-2023')).toBe('tesla-model-3-lr-2023')
+  })
+
+  it('returns null for empty string', () => {
+    expect(sanitiseVehicleId('')).toBeNull()
+  })
+
+  it('returns null for ids with invalid characters', () => {
+    expect(sanitiseVehicleId('tesla model 3')).toBeNull()
+    expect(sanitiseVehicleId('<script>')).toBeNull()
+    expect(sanitiseVehicleId('Tesla_Model_3')).toBeNull()
+  })
+
+  it('returns null for ids over 60 characters', () => {
+    expect(sanitiseVehicleId('a'.repeat(61))).toBeNull()
+    expect(sanitiseVehicleId('a'.repeat(60))).toBe('a'.repeat(60))
+  })
+})
+
+describe('parseUrlParams — vehicle params', () => {
+  it('parses vehicle and charge params', () => {
+    const r = parseUrlParams('?vehicle=tesla-model-3-lr-2023&charge=80')
+    expect(r.vehicleId).toBe('tesla-model-3-lr-2023')
+    expect(r.chargePercent).toBe(80)
+  })
+
+  it('clamps charge to 10–100 range', () => {
+    expect(parseUrlParams('?charge=5').chargePercent).toBe(10)
+    expect(parseUrlParams('?charge=999').chargePercent).toBe(100)
+  })
+
+  it('rejects invalid vehicle id', () => {
+    expect(parseUrlParams('?vehicle=<evil>').vehicleId).toBeUndefined()
+  })
+})
+
 describe('buildUrlSearch', () => {
   it('builds a round-trippable query string', () => {
     const qs = buildUrlSearch('Luton', 'Newquay', 5, 150)
@@ -123,5 +167,12 @@ describe('buildUrlSearch', () => {
     expect(qs).toContain('King')
     const r = parseUrlParams(qs)
     expect(r.from).toBe("King's Cross")
+  })
+
+  it('includes vehicle and charge when provided', () => {
+    const qs = buildUrlSearch('Luton', 'Newquay', 5, 150, 'tesla-model-3-lr-2023', 80)
+    const r = parseUrlParams(qs)
+    expect(r.vehicleId).toBe('tesla-model-3-lr-2023')
+    expect(r.chargePercent).toBe(80)
   })
 })

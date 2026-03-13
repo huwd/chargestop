@@ -288,6 +288,36 @@ input[type="range"]::-webkit-slider-thumb {
 .empty-state { text-align: center; padding: 30px 0; color: var(--muted); font-size: 0.75rem; }
 .empty-state .big { font-size: 2rem; margin-bottom: 8px; }
 
+/* ─── Vehicle picker ─── */
+#vehicle-select {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 7px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text);
+  transition: border-color 0.15s;
+  cursor: pointer;
+}
+#vehicle-select:focus { outline: none; border-color: var(--accent); }
+
+#charge-row { display: none; }
+#charge-row.visible { display: flex; }
+
+/* ─── Range limit terminator ─── */
+.range-limit-label {
+  background: rgba(239, 68, 68, 0.9);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
 /* ─── Mobile drawer toggle button ─── */
 #drawer-toggle {
   display: none;
