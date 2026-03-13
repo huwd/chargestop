@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChargeStop — EV + Indie Food Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #0e0f11;
+    --panel: #15161a;
+    --border: #252730;
+    --accent: #f0c040;
+    --green: #5ecf8a;
+    --blue: #4cb8f5;
+    --red: #e05c5c;
+    --text: #d8dae0;
+    --muted: #6b7280;
+    --font-mono: 'DM Mono', monospace;
+    --font-display: 'Syne', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-mono);
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ─── Sidebar ─── */
+  #sidebar {
+    width: 340px;
+    flex-shrink: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #sidebar-header {
+    padding: 20px 20px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  #sidebar-header h1 {
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--accent);
+  }
+
+  #sidebar-header p {
+    font-size: 0.68rem;
+    color: var(--muted);
+    margin-top: 3px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  #controls {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .field {
+    margin-bottom: 10px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .field input[type="text"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 7px 10px;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    color: var(--text);
+    transition: border-color 0.15s;
+  }
+
+  .field input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .slider-row label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    white-space: nowrap;
+    width: 130px;
+    flex-shrink: 0;
+  }
+
+  .slider-row label span {
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  input[type="range"] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+  }
+
+  #plan-btn {
+    width: 100%;
+    background: var(--accent);
+    color: #0e0f11;
+    border: none;
+    border-radius: 4px;
+    padding: 9px;
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: opacity 0.15s;
+    margin-top: 6px;
+  }
+
+  #plan-btn:hover { opacity: 0.85; }
+  #plan-btn:disabled { opacity: 0.4; cursor: default; }
+
+  #status-bar {
+    padding: 7px 20px;
+    font-size: 0.68rem;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    min-height: 30px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+  }
+  .dot.active { background: var(--accent); animation: pulse 1s infinite; }
+  .dot.ok { background: var(--green); }
+  .dot.err { background: var(--red); }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+  }
+
+  #results {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 20px;
+  }
+
+  #results::-webkit-scrollbar { width: 4px; }
+  #results::-webkit-scrollbar-track { background: transparent; }
+  #results::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .section-label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .charger-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    border-left: 3px solid var(--accent);
+  }
+
+  .charger-card:hover { border-color: var(--accent); background: #1a1b20; }
+  .charger-card.active { border-color: var(--green); background: #111814; }
+
+  .charger-name {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+
+  .charger-meta {
+    font-size: 0.68rem;
+    color: var(--muted);
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .tag {
+    background: var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 0.65rem;
+  }
+  .tag.ccs { background: #1e2d3d; color: var(--blue); }
+  .tag.chademo { background: #2a1e10; color: #f09040; }
+  .tag.tesla { background: #2a1010; color: #e05c5c; }
+
+  .food-list {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    display: none;
+  }
+
+  .food-list.open { display: block; }
+
+  .food-searching {
+    font-size: 0.7rem;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .food-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .food-item:last-child { border-bottom: none; }
+
+  .food-icon { font-size: 1em; flex-shrink: 0; line-height: 1.4; }
+
+  .food-info { flex: 1; min-width: 0; }
+
+  .food-name {
+    font-size: 0.78rem;
+    color: var(--green);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .food-detail { font-size: 0.65rem; color: var(--muted); }
+
+  .food-none {
+    font-size: 0.7rem;
+    color: var(--red);
+    font-style: italic;
+    padding: 6px 0;
+  }
+
+  .dist-badge {
+    font-size: 0.62rem;
+    color: var(--accent);
+    white-space: nowrap;
+    flex-shrink: 0;
+    align-self: center;
+  }
+
+  /* ─── Map ─── */
+  #map { flex: 1; }
+
+  /* ─── Custom Leaflet markers ─── */
+  .marker-charger {
+    background: var(--accent);
+    border: 2px solid #0e0f11;
+    border-radius: 50%;
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    box-shadow: 0 0 0 2px rgba(240,192,64,0.3);
+  }
+
+  .marker-charger.has-food {
+    background: var(--green);
+    box-shadow: 0 0 0 2px rgba(94,207,138,0.35);
+  }
+
+  .marker-food-cafe    { background: #6f4e37; color: #fff; }
+  .marker-food-pub     { background: #3d5a2e; color: #fff; }
+  .marker-food-restaurant { background: #2a3d5a; color: #fff; }
+
+  .marker-food {
+    border: 2px solid #0e0f11;
+    border-radius: 50%;
+    width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  }
+
+  /* Leaflet popup overrides */
+  .leaflet-popup-content-wrapper {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+  }
+  .leaflet-popup-tip { background: var(--panel); }
+  .leaflet-popup-content b { color: var(--accent); }
+
+  .empty-state {
+    text-align: center;
+    padding: 30px 0;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+  .empty-state .big { font-size: 2rem; margin-bottom: 8px; }
+
+  /* ─── Mobile drawer toggle button ─── */
+  #drawer-toggle {
+    display: none;
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1100;
+    background: var(--accent);
+    color: #0e0f11;
+    border: none;
+    border-radius: 24px;
+    padding: 10px 22px;
+    font-family: var(--font-display);
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    white-space: nowrap;
+    transition: opacity 0.15s;
+  }
+  #drawer-toggle:hover { opacity: 0.85; }
+
+  /* ─── Responsive: mobile layout ─── */
+  @media (max-width: 700px) {
+    body {
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      height: 100dvh !important;
+      width: 100vw;
+    }
+
+    #sidebar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      z-index: 1000;
+      border-right: none;
+      border-top: 2px solid var(--accent);
+      border-radius: 16px 16px 0 0;
+      max-height: 80dvh;
+      transform: translateY(calc(100% - 54px)); /* peeks header */
+      transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+      overflow: hidden;
+    }
+
+    #sidebar.open {
+      transform: translateY(0);
+    }
+
+    /* Drag handle pill */
+    #sidebar::before {
+      content: '';
+      display: block;
+      width: 40px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--border);
+      margin: 8px auto 0;
+      flex-shrink: 0;
+    }
+
+    #sidebar-header {
+      padding: 8px 16px 10px;
+      cursor: pointer;
+      user-select: none;
+      flex-shrink: 0;
+    }
+
+    #sidebar-header h1 { font-size: 1rem; }
+    #sidebar-header p  { display: none; }
+
+    #controls {
+      padding: 12px 16px;
+    }
+
+    /* Two-column inputs on mobile */
+    #inputs-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .field { margin-bottom: 0; }
+
+    .field input[type="text"] {
+      font-size: 0.9rem;
+      padding: 9px 10px;
+    }
+
+    /* Sliders side by side */
+    #sliders-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .slider-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      margin-bottom: 0;
+    }
+
+    .slider-row label {
+      width: auto;
+      font-size: 0.6rem;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      width: 20px;
+      height: 20px;
+    }
+
+    #plan-btn {
+      margin-top: 10px;
+      padding: 12px;
+      font-size: 0.9rem;
+    }
+
+    #status-bar {
+      padding: 6px 16px;
+      font-size: 0.65rem;
+    }
+
+    #results {
+      padding: 10px 16px;
+      /* Let results scroll within the open drawer */
+      max-height: calc(80dvh - 220px);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .charger-card { padding: 10px; }
+    .charger-name { font-size: 0.85rem; }
+
+    /* Zoom control - push above drawer peek */
+    .leaflet-bottom.leaflet-right {
+      bottom: 60px !important;
+    }
+
+    #drawer-toggle { display: flex; align-items: center; gap: 6px; }
+    #drawer-toggle.open { background: var(--border); color: var(--text); }
+  }
+
+</style>
+</head>
+<body>
+
+<button id="drawer-toggle" aria-label="Toggle panel">⚡ ChargeStop</button>
+<div id="sidebar">
+  <div id="sidebar-header">
+    <h1>ChargeStop</h1>
+    <p>EV fast charging + indie food, along any route</p>
+  </div>
+
+  <div id="controls">
+    <div id="inputs-row">
+      <div class="field">
+        <label>From</label>
+        <input type="text" id="from-input" value="Luton, UK" placeholder="e.g. Luton, UK">
+      </div>
+      <div class="field">
+        <label>To</label>
+        <input type="text" id="to-input" value="Newquay, UK" placeholder="e.g. Newquay, UK">
+      </div>
+    </div>
+
+    <div id="sliders-row">
+      <div class="slider-row">
+        <label>Detour: <span id="detour-val">5</span>km</label>
+        <input type="range" id="detour-slider" min="1" max="25" value="5" step="1">
+      </div>
+      <div class="slider-row">
+        <label>Food within: <span id="food-val">150</span>m</label>
+        <input type="range" id="food-slider" min="50" max="600" value="150" step="50">
+      </div>
+    </div>
+
+    <button id="plan-btn">Plan Route</button>
+  </div>
+
+  <div id="status-bar">
+    <div class="dot" id="status-dot"></div>
+    <span id="status-msg">Enter a route and click Plan</span>
+  </div>
+
+  <div id="results">
+    <div class="empty-state">
+      <div class="big">⚡</div>
+      <div>Plan a route to find<br>charger + food combos</div>
+    </div>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<script>
+window.addEventListener('load', function() {
+// ─── Map setup ────────────────────────────────────────────────
+const map = L.map('map', { zoomControl: false }).setView([52.5, -2.5], 7);
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap © CARTO',
+  maxZoom: 19,
+  subdomains: 'abcd'
+}).addTo(map);
+
+// ─── State ────────────────────────────────────────────────────
+let routeLayer = null;
+let chargerMarkers = [];
+let foodMarkers = [];
+let routeSampled = []; // downsampled for distance checks
+
+// ─── Slider wiring ────────────────────────────────────────────
+document.getElementById('detour-slider').addEventListener('input', e => {
+  document.getElementById('detour-val').textContent = e.target.value;
+});
+document.getElementById('food-slider').addEventListener('input', e => {
+  document.getElementById('food-val').textContent = e.target.value;
+});
+
+// ─── Status helpers ───────────────────────────────────────────
+function setStatus(msg, state = 'active') {
+  document.getElementById('status-msg').textContent = msg;
+  const dot = document.getElementById('status-dot');
+  dot.className = 'dot ' + state;
+}
+
+// ─── Geo utilities ────────────────────────────────────────────
+function haversineM(a, b) {
+  const R = 6371000;
+  const dLat = (b[0] - a[0]) * Math.PI / 180;
+  const dLon = (b[1] - a[1]) * Math.PI / 180;
+  const s1 = Math.sin(dLat / 2), s2 = Math.sin(dLon / 2);
+  const ac = s1 * s1 + Math.cos(a[0] * Math.PI / 180) * Math.cos(b[0] * Math.PI / 180) * s2 * s2;
+  return R * 2 * Math.atan2(Math.sqrt(ac), Math.sqrt(1 - ac));
+}
+
+function downsampleRoute(coords, targetCount = 300) {
+  if (coords.length <= targetCount) return coords;
+  const step = Math.floor(coords.length / targetCount);
+  const out = [];
+  for (let i = 0; i < coords.length; i += step) out.push(coords[i]);
+  if (out[out.length - 1] !== coords[coords.length - 1]) out.push(coords[coords.length - 1]);
+  return out;
+}
+
+function minDistToRouteKm(point, sampled) {
+  let min = Infinity;
+  for (const p of sampled) {
+    const d = haversineM(point, p);
+    if (d < min) min = d;
+  }
+  return min / 1000;
+}
+
+// ─── API calls ────────────────────────────────────────────────
+async function geocode(place) {
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(place)}&format=json&limit=1&countrycodes=gb`;
+  const r = await fetch(url, { headers: { 'User-Agent': 'ChargeStopFinder/1.0' } });
+  const d = await r.json();
+  if (!d.length) throw new Error(`Cannot find: ${place}`);
+  return [parseFloat(d[0].lat), parseFloat(d[0].lon)];
+}
+
+async function getRoute(from, to) {
+  const url = `https://router.project-osrm.org/route/v1/driving/${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson`;
+  const r = await fetch(url);
+  const d = await r.json();
+  if (d.code !== 'Ok') throw new Error('Routing failed — OSRM error');
+  // GeoJSON coords are [lon, lat]; convert to [lat, lon]
+  return d.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+}
+
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.openstreetmap.ru/api/interpreter',
+];
+
+async function overpass(query) {
+  let lastErr;
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    try {
+      const r = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'data=' + encodeURIComponent(query)
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status} from ${endpoint}`);
+      const text = await r.text();
+      if (text.trim().startsWith('<') && !text.includes('"elements"')) {
+        throw new Error('Got HTML instead of JSON — server overloaded');
+      }
+      return JSON.parse(text);
+    } catch (e) {
+      lastErr = e;
+      console.warn(`Overpass endpoint failed (${endpoint}):`, e.message);
+    }
+  }
+  throw new Error(`All Overpass endpoints failed. Last: ${lastErr.message}`);
+}
+
+async function queryChargers(routeCoords, detourKm) {
+  const lats = routeCoords.map(c => c[0]);
+  const lons = routeCoords.map(c => c[1]);
+  const pad = detourKm / 111;
+  const s = Math.min(...lats) - pad, n = Math.max(...lats) + pad;
+  const w = Math.min(...lons) - pad, e = Math.max(...lons) + pad;
+
+  const q = `[out:json][timeout:40];
+node["amenity"="charging_station"](${s},${w},${n},${e});
+out body;`;
+  const d = await overpass(q);
+  return d.elements;
+}
+
+const CHAIN_NAMES = /\b(costa|starbucks|caffe nero|mcdonald|burger king|greggs|pret|subway|kfc|nando|wagamama|leon|itsu|wasabi|eat\.|wetherspoon|tim horton|cafe rouge|harvester|toby carvery|beefeater|brewers fayre)\b/i;
+
+async function queryFoodNear(lat, lon, radiusM) {
+  const q = `[out:json][timeout:25];
+(
+  node["amenity"="cafe"](around:${radiusM},${lat},${lon});
+  node["amenity"="restaurant"](around:${radiusM},${lat},${lon});
+  node["amenity"="pub"](around:${radiusM},${lat},${lon});
+  node["amenity"="bar"](around:${radiusM},${lat},${lon});
+  node["amenity"="fast_food"](around:${radiusM},${lat},${lon});
+);
+out body;`;
+  const d = await overpass(q);
+  return d.elements.filter(el => {
+    const tags = el.tags || {};
+    if (!tags.name) return false;
+    if (tags.brand || tags['brand:wikidata'] || tags['brand:en']) return false;
+    if (CHAIN_NAMES.test(tags.name)) return false;
+    return true;
+  });
+}
+
+// ─── Charger classification ───────────────────────────────────
+function getChargerSockets(tags) {
+  const sockets = [];
+  if (tags['socket:type2_combo']) sockets.push('CCS');
+  if (tags['socket:chademo'])     sockets.push('CHAdeMO');
+  if (tags['socket:tesla_supercharger'] || tags['socket:tesla_ccs']) sockets.push('Tesla');
+  return sockets;
+}
+
+function isFastCharger(tags) {
+  const sockets = getChargerSockets(tags);
+  if (sockets.length > 0) return true;
+  const power = parseInt(tags['maxpower'] || tags['charging_station:output'] || '0');
+  return power >= 50;
+}
+
+// ─── Marker factories ─────────────────────────────────────────
+function makeChargerMarker(lat, lon, hasFoodNearby = false) {
+  const icon = L.divIcon({
+    html: `<div class="marker-charger${hasFoodNearby ? ' has-food' : ''}">⚡</div>`,
+    className: '',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14]
+  });
+  return L.marker([lat, lon], { icon });
+}
+
+function makeFoodMarker(lat, lon, amenity) {
+  const emojis = { cafe: '☕', pub: '🍺', bar: '🍺', restaurant: '🍽️', fast_food: '🍜' };
+  const classes = { cafe: 'marker-food-cafe', pub: 'marker-food-pub', restaurant: 'marker-food-restaurant', bar: 'marker-food-pub', fast_food: 'marker-food-restaurant' };
+  const emoji = emojis[amenity] || '🍴';
+  const cls = classes[amenity] || 'marker-food-restaurant';
+  const icon = L.divIcon({
+    html: `<div class="marker-food ${cls}">${emoji}</div>`,
+    className: '',
+    iconSize: [24, 24],
+    iconAnchor: [12, 12]
+  });
+  return L.marker([lat, lon], { icon });
+}
+
+// ─── Clear helpers ────────────────────────────────────────────
+function clearFoodMarkers() {
+  foodMarkers.forEach(m => map.removeLayer(m));
+  foodMarkers = [];
+}
+
+function clearAll() {
+  if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+  chargerMarkers.forEach(m => map.removeLayer(m));
+  chargerMarkers = [];
+  clearFoodMarkers();
+}
+
+// ─── Food display ─────────────────────────────────────────────
+function formatCuisine(tags) {
+  const c = tags.cuisine || '';
+  return c ? c.replace(/_/g,' ').replace(/;/g,' · ') : '';
+}
+
+function foodHtml(foods, chargerCoord) {
+  if (foods.length === 0) {
+    return `<div class="food-none">No unbranded places found at this radius — try increasing it</div>`;
+  }
+  return foods.map(f => {
+    const name = f.tags.name || 'Unknown';
+    const amenity = f.tags.amenity;
+    const cuisine = formatCuisine(f.tags);
+    const dist = Math.round(haversineM(chargerCoord, [f.lat, f.lon]));
+    const emojis = { cafe: '☕', pub: '🍺', bar: '🍺', restaurant: '🍽️' };
+    const emoji = emojis[amenity] || '🍴';
+    const detail = [amenity, cuisine].filter(Boolean).join(' · ');
+    return `<div class="food-item">
+      <div class="food-icon">${emoji}</div>
+      <div class="food-info">
+        <div class="food-name">${name}</div>
+        <div class="food-detail">${detail}</div>
+      </div>
+      <div class="dist-badge">${dist}m</div>
+    </div>`;
+  }).join('');
+}
+
+// ─── Main plan function ───────────────────────────────────────
+document.getElementById('plan-btn').addEventListener('click', async () => {
+  const fromStr = document.getElementById('from-input').value.trim();
+  const toStr   = document.getElementById('to-input').value.trim();
+  const detourKm  = parseFloat(document.getElementById('detour-slider').value);
+  const foodRadiusM = parseFloat(document.getElementById('food-slider').value);
+
+  const btn = document.getElementById('plan-btn');
+  btn.disabled = true;
+  clearAll();
+  document.getElementById('results').innerHTML = '';
+
+  try {
+    setStatus('Geocoding locations…');
+    const [fromCoord, toCoord] = await Promise.all([geocode(fromStr), geocode(toStr)]);
+
+    setStatus('Calculating route…');
+    const routeCoords = await getRoute(fromCoord, toCoord);
+    routeSampled = downsampleRoute(routeCoords, 400);
+
+    routeLayer = L.polyline(routeCoords, {
+      color: '#f0c040',
+      weight: 3,
+      opacity: 0.75
+    }).addTo(map);
+    map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
+
+    setStatus('Querying OSM for charging stations…');
+    const allChargers = await queryChargers(routeCoords, detourKm);
+
+    // Filter to chargers within detour distance
+    const nearbyChargers = allChargers.filter(c =>
+      minDistToRouteKm([c.lat, c.lon], routeSampled) <= detourKm
+    );
+
+    // Prefer fast chargers; fall back to all nearby if none found
+    const fastOnly = nearbyChargers.filter(c => isFastCharger(c.tags));
+    const displayChargers = fastOnly.length > 0 ? fastOnly : nearbyChargers;
+
+    if (displayChargers.length === 0) {
+      setStatus(`No chargers found within ${detourKm}km — try increasing detour`, 'err');
+      document.getElementById('results').innerHTML = `<div class="empty-state"><div class="big">😞</div><div>No chargers found.<br>Try a wider detour.</div></div>`;
+      btn.disabled = false;
+      return;
+    }
+
+    const label = fastOnly.length > 0
+      ? `${displayChargers.length} fast charger${displayChargers.length !== 1 ? 's' : ''} found`
+      : `${displayChargers.length} charger${displayChargers.length !== 1 ? 's' : ''} (slow) found`;
+
+    setStatus(label + ' — click any to find food', 'ok');
+
+    // Build sidebar
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.innerHTML = `<div class="section-label" style="margin-bottom:10px">${label} · ${detourKm}km detour · food within ${foodRadiusM}m</div>`;
+
+    displayChargers.forEach(c => {
+      const name = c.tags.name || c.tags.operator || 'Charging Station';
+      const network = c.tags.network || c.tags.operator || '';
+      const sockets = getChargerSockets(c.tags);
+
+      // Sidebar card
+      const card = document.createElement('div');
+      card.className = 'charger-card';
+      card.id = `card-${c.id}`;
+
+      const socketTags = sockets.map(s => {
+        const cls = s === 'CCS' ? 'ccs' : s === 'CHAdeMO' ? 'chademo' : 'tesla';
+        return `<span class="tag ${cls}">${s}</span>`;
+      }).join('');
+
+      card.innerHTML = `
+        <div class="charger-name">⚡ ${name}</div>
+        <div class="charger-meta">
+          ${network && network !== name ? `<span>${network}</span>` : ''}
+          ${socketTags || '<span class="tag">AC/Unknown</span>'}
+        </div>
+        <div class="food-list" id="food-${c.id}">
+          <div class="food-searching">Click to search nearby food…</div>
+        </div>`;
+
+      // Map marker
+      const marker = makeChargerMarker(c.lat, c.lon, false);
+      marker.bindPopup(`<b>${name}</b><br>${network ? network + '<br>' : ''}${sockets.join(' · ') || 'AC'}<br><i style="color:#6b7280;font-size:0.85em">Click sidebar card to find food</i>`);
+      marker.addTo(map);
+      chargerMarkers.push(marker);
+
+      let foodLoaded = false;
+
+      const loadFood = async () => {
+        if (card.classList.contains('active') && foodLoaded) {
+          // Toggle off
+          card.classList.remove('active');
+          document.getElementById(`food-${c.id}`).classList.remove('open');
+          clearFoodMarkers();
+          return;
+        }
+
+        // Deactivate others
+        document.querySelectorAll('.charger-card.active').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.food-list.open').forEach(el => el.classList.remove('open'));
+        clearFoodMarkers();
+
+        card.classList.add('active');
+        const foodDiv = document.getElementById(`food-${c.id}`);
+        foodDiv.classList.add('open');
+        foodDiv.innerHTML = '<div class="food-searching">Searching Overpass for indie food…</div>';
+
+        map.setView([c.lat, c.lon], 15, { animate: true });
+        marker.openPopup();
+
+        try {
+          const foods = await queryFoodNear(c.lat, c.lon, foodRadiusM);
+          foodLoaded = true;
+
+          // Update marker colour if food found
+          if (foods.length > 0) {
+            map.removeLayer(marker);
+            const newMarker = makeChargerMarker(c.lat, c.lon, true);
+            newMarker.bindPopup(marker.getPopup());
+            newMarker.addTo(map);
+            newMarker.on('click', loadFood);
+          }
+
+          foodDiv.innerHTML = foodHtml(foods, [c.lat, c.lon]);
+
+          // Add food markers
+          foods.forEach(f => {
+            const fm = makeFoodMarker(f.lat, f.lon, f.tags.amenity);
+            const cuisine = formatCuisine(f.tags);
+            fm.bindPopup(`<b style="color:#5ecf8a">${f.tags.name || 'Unnamed'}</b><br>${f.tags.amenity}${cuisine ? ' · ' + cuisine : ''}<br><i style="color:#6b7280;font-size:0.85em">✓ No brand tag — likely indie</i>`);
+            fm.addTo(map);
+            foodMarkers.push(fm);
+          });
+
+          setStatus(`${foods.length} indie place${foods.length !== 1 ? 's' : ''} near ${name}`, 'ok');
+
+        } catch (e) {
+          foodDiv.innerHTML = `<div class="food-none">Overpass error: ${e.message}</div>`;
+          setStatus('Food search failed', 'err');
+        }
+      };
+
+      card.addEventListener('click', loadFood);
+      marker.on('click', () => { card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); loadFood(); });
+
+      resultsDiv.appendChild(card);
+    });
+
+  } catch (e) {
+    setStatus(`Error: ${e.message}`, 'err');
+    document.getElementById('results').innerHTML = `<div class="empty-state"><div class="big">⚠️</div><div>${e.message}</div></div>`;
+  }
+
+  btn.disabled = false;
+});
+
+// ─── Mobile drawer ─────────────────────────────────────────────
+const sidebar = document.getElementById('sidebar');
+const drawerToggle = document.getElementById('drawer-toggle');
+const sidebarHeader = document.getElementById('sidebar-header');
+
+function isMobile() { return window.innerWidth <= 700; }
+
+function openDrawer() {
+  sidebar.classList.add('open');
+  drawerToggle.classList.add('open');
+  drawerToggle.textContent = '✕ Close';
+}
+
+function closeDrawer() {
+  sidebar.classList.remove('open');
+  drawerToggle.classList.remove('open');
+  drawerToggle.innerHTML = '⚡ ChargeStop';
+}
+
+function toggleDrawer() {
+  if (sidebar.classList.contains('open')) closeDrawer();
+  else openDrawer();
+}
+
+drawerToggle.addEventListener('click', toggleDrawer);
+sidebarHeader.addEventListener('click', () => { if (isMobile()) toggleDrawer(); });
+
+// Auto-open drawer after route is planned on mobile
+const origPlanBtn = document.getElementById('plan-btn');
+origPlanBtn.addEventListener('click', () => {
+  if (isMobile()) setTimeout(openDrawer, 300);
+});
+
+// Invalidate map size when drawer toggles (Leaflet needs this)
+sidebar.addEventListener('transitionend', () => {
+  map.invalidateSize();
+});
+
+// Touch swipe-to-close on the drawer
+let touchStartY = 0;
+sidebar.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, { passive: true });
+sidebar.addEventListener('touchend', e => {
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  if (dy > 60 && isMobile()) closeDrawer();
+}, { passive: true });
+
+}); // end window load
+</script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChargeStop — EV + Indie Food Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+
+<button id="drawer-toggle" aria-label="Toggle panel">⚡ ChargeStop</button>
+
+<div id="sidebar">
+  <div id="sidebar-header">
+    <h1>ChargeStop</h1>
+    <p>EV fast charging + indie food, along any route</p>
+  </div>
+
+  <div id="controls">
+    <div id="inputs-row">
+      <div class="field">
+        <label for="from-input">From</label>
+        <input type="text" id="from-input" value="Luton, UK" placeholder="e.g. Luton, UK">
+      </div>
+      <div class="field">
+        <label for="to-input">To</label>
+        <input type="text" id="to-input" value="Newquay, UK" placeholder="e.g. Newquay, UK">
+      </div>
+    </div>
+
+    <div id="sliders-row">
+      <div class="slider-row">
+        <label for="detour-slider">Detour: <span id="detour-val">5</span>km</label>
+        <input type="range" id="detour-slider" min="1" max="25" value="5" step="1">
+      </div>
+      <div class="slider-row">
+        <label for="food-slider">Food within: <span id="food-val">150</span>m</label>
+        <input type="range" id="food-slider" min="50" max="600" value="150" step="50">
+      </div>
+    </div>
+
+    <button id="plan-btn">Plan Route</button>
+  </div>
+
+  <div id="status-bar">
+    <div class="dot" id="status-dot"></div>
+    <span id="status-msg">Enter a route and click Plan</span>
+  </div>
+
+  <div id="results">
+    <div class="empty-state">
+      <div class="big">⚡</div>
+      <div>Plan a route to find<br>charger + food combos</div>
+    </div>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
