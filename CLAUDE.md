@@ -26,17 +26,29 @@ configurable radius. No chains. No McDonald's. Real food.
 
 ```
 src/
-  geo.ts          — haversine, downsampleRoute, minDistToRoute, bbox
-  overpass.ts     — query builder + multi-endpoint failover
+  geo.ts          — haversine, downsampleRoute, minDistToRoute, bbox, findInsertPosition
+  overpass.ts     — query builder + multi-endpoint failover + localStorage cache
   filters.ts      — CHAIN_NAMES blocklist, isFastCharger, filterFood
-  routing.ts      — geocode (Nominatim) + getRoute (OSRM)
-  map.ts          — Leaflet initialisation + marker factories
-  ui.ts           — sidebar cards, status bar, drawer (mobile)
+  routing.ts      — geocode (Nominatim + lat,lon shortcut) + getRoute (OSRM, n waypoints)
+  range.ts        — charge-level colouring, terminator, multi-leg variants
+  map.ts          — Leaflet initialisation + marker factories + route animation
+  ui.ts           — sidebar cards, status bar, drawer (mobile), waypoint list rendering
+  waypoints.ts    — immutable WaypointList state model (insert/remove/reverse)
+  cache.ts        — localStorage TTL cache with LRU eviction (used by overpass.ts)
+  params.ts       — URL param parsing/serialisation (via=, charge_0=, charge_1=, …)
   main.ts         — orchestration: wires events, calls modules
+  data/
+    vehicles.ts   — UK EV vehicle database
 tests/
   geo.test.ts
   filters.test.ts
   overpass.test.ts
+  range.test.ts
+  routing.test.ts
+  waypoints.test.ts
+  cache.test.ts
+  params.test.ts
+  ui.test.ts
 e2e/
   route.spec.ts
 ```
