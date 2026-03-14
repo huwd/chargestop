@@ -42,13 +42,32 @@ const FOOD_CLASSES: Record<FoodAmenity, string> = {
   restaurant: 'marker-food-restaurant',
 }
 
+/** Animates a polyline drawing itself using SVG stroke-dashoffset. */
+function animatePolyline(line: L.Polyline): void {
+  line.once('add', () => {
+    // Access the underlying SVG path Leaflet creates
+    const el = (line as unknown as { _path?: SVGPathElement })._path
+    if (!el || typeof el.getTotalLength !== 'function') return
+    const len = el.getTotalLength()
+    el.style.strokeDasharray = String(len)
+    el.style.strokeDashoffset = String(len)
+    el.classList.add('route-animate')
+  })
+}
+
 export function buildRangeLayer(
   segments: import('./range.ts').RouteSegment[],
   terminator: import('./range.ts').TerminatorLine | null,
 ): L.FeatureGroup {
-  const layers: L.Layer[] = segments.map((seg) =>
-    L.polyline(seg.coords as L.LatLngExpression[], { color: seg.color, weight: 4, opacity: 0.9 }),
-  )
+  const layers: L.Layer[] = segments.map((seg) => {
+    const line = L.polyline(seg.coords as L.LatLngExpression[], {
+      color: seg.color,
+      weight: 4,
+      opacity: 0.9,
+    })
+    animatePolyline(line)
+    return line
+  })
   if (terminator) {
     layers.push(
       L.polyline(terminator.ends as L.LatLngExpression[], {

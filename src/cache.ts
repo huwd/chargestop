@@ -50,7 +50,9 @@ function evictOldest(store: Storage): void {
       // corrupted — remove it
       try {
         store.removeItem(k)
-      } catch {}
+      } catch {
+        // corrupted entry, removal failed — skip
+      }
     }
   }
   entries.sort((a, b) => a.cachedAt - b.cachedAt) // oldest first
@@ -60,7 +62,9 @@ function evictOldest(store: Storage): void {
     try {
       store.removeItem(entry.k)
       total -= entry.bytes
-    } catch {}
+    } catch {
+      // removal failed — skip
+    }
   }
 }
 
@@ -72,7 +76,9 @@ export function getCached<T>(key: string, ttlMs: number, store: Storage = localS
     if (Date.now() - entry.cachedAt >= ttlMs) {
       try {
         store.removeItem(storageKey(key))
-      } catch {}
+      } catch {
+        // removal failed — safe to ignore
+      }
       return null
     }
     return entry.data
@@ -96,6 +102,8 @@ export function clearCache(store: Storage = localStorage): void {
   for (const k of allCacheKeys(store)) {
     try {
       store.removeItem(k)
-    } catch {}
+    } catch {
+      // storage unavailable — skip
+    }
   }
 }

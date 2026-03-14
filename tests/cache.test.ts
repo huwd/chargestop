@@ -5,20 +5,20 @@ import { getCached, setCached, clearCache, cacheSize } from '../src/cache.ts'
 function makeMockStorage(): Storage {
   const store = new Map<string, string>()
   return {
-    getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => {
+    getItem: (k: string): string | null => store.get(k) ?? null,
+    setItem: (k: string, v: string): void => {
       store.set(k, v)
     },
-    removeItem: (k: string) => {
+    removeItem: (k: string): void => {
       store.delete(k)
     },
-    clear: () => {
+    clear: (): void => {
       store.clear()
     },
-    get length() {
+    get length(): number {
       return store.size
     },
-    key: (i: number) => [...store.keys()][i] ?? null,
+    key: (i: number): string | null => [...store.keys()][i] ?? null,
   }
 }
 
