@@ -138,15 +138,16 @@ function attachFoodLoader(
     const foodDiv = document.getElementById(`food-${charger.id}`)
     if (!foodDiv) return
     foodDiv.classList.add('open')
+
+    const chargerName = charger.tags.name ?? charger.tags.operator ?? 'Charging Station'
     const searchingMsg = indieOnly ? 'Searching for indie food…' : 'Searching for food…'
     foodDiv.innerHTML = `<div class="food-searching">${searchingMsg}</div>`
+    status(`Searching for food near ${chargerName}…`, 'active')
 
     map.setView([charger.lat, charger.lon], 15, { animate: true })
     marker.openPopup()
 
-    try {
-      const query = buildFoodQuery(charger.lat, charger.lon, foodRadiusM)
-      const data = await overpass(query)
+    const renderFood = (data: import('./overpass.ts').OverpassResponse): void => {
       const foods = indieOnly ? data.elements.filter(isIndieFood) : data.elements
       foodLoaded = true
 
@@ -163,7 +164,8 @@ function attachFoodLoader(
         })
       }
 
-      const chargerName = charger.tags.name ?? charger.tags.operator ?? 'Charging Station'
+      foodMarkers.forEach((m) => map.removeLayer(m))
+      foodMarkers = []
       foodDiv.innerHTML = renderFoodList(foods, [charger.lat, charger.lon], foodRadiusM, indieOnly)
 
       foods.forEach((f) => {
@@ -185,6 +187,14 @@ function attachFoodLoader(
         `${foods.length} ${placeLabel}${foods.length !== 1 ? 's' : ''} near ${chargerName}`,
         'ok',
       )
+    }
+
+    try {
+      const query = buildFoodQuery(charger.lat, charger.lon, foodRadiusM)
+      const data = await overpass(query, undefined, {
+        onRefresh: (fresh) => renderFood(fresh),
+      })
+      renderFood(data)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       foodDiv.innerHTML = `<div class="food-none">Overpass error: ${msg}</div>`
