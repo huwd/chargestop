@@ -1,13 +1,7 @@
 /** Orchestration: wires UI events to routing, Overpass, and map. */
 
 import L from 'leaflet'
-import {
-  initMap,
-  makeChargerMarker,
-  makeFoodMarker,
-  buildRangeLayer,
-  animateSingleRoute,
-} from './map.ts'
+import { initMap, makeChargerMarker, makeFoodMarker, buildRangeLayer } from './map.ts'
 import { geocode, getRoute } from './routing.ts'
 import { downsampleRoute, minDistToRouteKm, routeBBox, type LatLon } from './geo.ts'
 import { overpass, buildChargerQuery, buildFoodQuery } from './overpass.ts'
@@ -356,7 +350,6 @@ async function runPlan(): Promise<void> {
       rangeLayer = buildRangeLayer(segments, terminator)
       rangeLayer.addTo(map)
       map.fitBounds(rangeLayer.getBounds(), { padding: [50, 50] })
-      animateSingleRoute(routeCoords, map)
     } else {
       routeLayer = L.polyline(routeCoords as LatLon[], {
         color: '#f0c040',
@@ -365,7 +358,6 @@ async function runPlan(): Promise<void> {
       })
       routeLayer.addTo(map)
       map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] })
-      animateSingleRoute(routeCoords, map)
     }
 
     const chargerQuery = buildChargerQuery(
