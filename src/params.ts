@@ -7,10 +7,13 @@ export interface RouteParams {
   foodRadius: number
   vehicleId: string
   chargePercent: number
+  chargePercents: number[]
   indieOnly: boolean
+  vias: string[]
 }
 
 const PLACE_MAX_LEN = 100
+const MAX_VIA_COUNT = 6
 
 export function sanitisePlace(raw: string): string | null {
   const s = raw.trim()
@@ -72,15 +75,42 @@ export function parseUrlParams(search: string): Partial<RouteParams> {
     if (s) result.vehicleId = s
   }
 
+  // Legacy single charge= param → chargePercents[0]
   const charge = p.get('charge')
   if (charge !== null) {
     const n = parseNumericParam(charge, 10, 100, 5)
-    if (n !== null) result.chargePercent = n
+    if (n !== null) {
+      result.chargePercent = n
+      result.chargePercents = [n]
+    }
+  }
+
+  // Per-leg indexed charge_0=, charge_1=, … params
+  const indexedPercents: number[] = []
+  let idx = 0
+  while (p.has(`charge_${idx}`)) {
+    const raw = p.get(`charge_${idx}`) ?? ''
+    const n = parseNumericParam(raw, 10, 100, 5)
+    if (n !== null) indexedPercents.push(n)
+    idx++
+  }
+  if (indexedPercents.length > 0) {
+    result.chargePercents = indexedPercents
   }
 
   const indie = p.get('indie')
   if (indie === '0') result.indieOnly = false
   else if (indie === '1') result.indieOnly = true
+
+  // Via waypoints — repeated ?via= params, capped at MAX_VIA_COUNT
+  const rawVias = p.getAll('via')
+  if (rawVias.length > 0) {
+    const sanitised = rawVias
+      .map(sanitisePlace)
+      .filter((s): s is string => s !== null)
+      .slice(0, MAX_VIA_COUNT)
+    if (sanitised.length > 0) result.vias = sanitised
+  }
 
   return result
 }
@@ -93,15 +123,23 @@ export function buildUrlSearch(
   vehicleId?: string,
   chargePercent?: number,
   indieOnly?: boolean,
+  vias?: string[],
+  chargePercents?: number[],
 ): string {
-  const params: Record<string, string> = {
+  const params = new URLSearchParams({
     from,
     to,
     charger_distance: String(chargerDistance),
     food_radius: String(foodRadius),
+  })
+  if (vehicleId) params.set('vehicle', vehicleId)
+  if (chargePercent !== undefined) params.set('charge', String(chargePercent))
+  if (indieOnly === false) params.set('indie', '0')
+  if (vias && vias.length > 0) {
+    vias.forEach((v) => params.append('via', v))
   }
-  if (vehicleId) params.vehicle = vehicleId
-  if (chargePercent !== undefined) params.charge = String(chargePercent)
-  if (indieOnly === false) params.indie = '0'
-  return '?' + new URLSearchParams(params).toString()
+  if (chargePercents && chargePercents.length > 0) {
+    chargePercents.forEach((c, i) => params.set(`charge_${i}`, String(c)))
+  }
+  return '?' + params.toString()
 }
