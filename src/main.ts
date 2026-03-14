@@ -20,7 +20,9 @@ import {
   initDrawer,
   populateVehiclePicker,
   renderWaypointList,
+  renderShareBar,
 } from './ui.ts'
+import { buildShareTitle } from './share.ts'
 import { parseUrlParams, buildUrlSearch } from './params.ts'
 import { findVehicle, type Vehicle } from './data/vehicles.ts'
 import {
@@ -55,6 +57,7 @@ const vehicleSelect = document.getElementById('vehicle-select') as HTMLSelectEle
 const planBtn = document.getElementById('plan-btn') as HTMLButtonElement
 const statusMsg = document.getElementById('status-msg') as HTMLElement
 const statusDot = document.getElementById('status-dot') as HTMLElement
+const shareBarEl = document.getElementById('share-bar') as HTMLElement
 const resultsDiv = document.getElementById('results') as HTMLElement
 const planSteps = document.getElementById('plan-steps') as HTMLElement
 const sidebar = document.getElementById('sidebar') as HTMLElement
@@ -421,6 +424,44 @@ async function runPlan(): Promise<void> {
       const cacheLabel = cached ? ' ⚡' : ''
       status(label + ' — click any to find food' + cacheLabel, 'ok')
       step('done')
+
+      // Share bar — build from the current filled-in place names
+      const filledPlaces = wpState.places.filter((p) => p.trim() !== '')
+      renderShareBar(
+        shareBarEl,
+        filledPlaces,
+        window.location.href,
+        buildShareTitle(filledPlaces),
+        filledPlaces.length > 2,
+        {
+          onCopy(url, btn) {
+            if (navigator.clipboard?.writeText) {
+              void navigator.clipboard.writeText(url).then(() => {
+                btn.textContent = '✓ Copied!'
+                btn.classList.add('copied')
+                setTimeout(() => {
+                  btn.textContent = '🔗 Copy link'
+                  btn.classList.remove('copied')
+                }, 2000)
+              })
+            } else {
+              // Clipboard API unavailable — show a selectable input
+              const fallback = document.createElement('input')
+              fallback.className = 'share-fallback-input'
+              fallback.value = url
+              fallback.readOnly = true
+              shareBarEl.appendChild(fallback)
+              fallback.select()
+            }
+          },
+          onShare: navigator.share
+            ? (title: string, url: string): void => void navigator.share({ title, url })
+            : undefined,
+          onAppleToast() {
+            status('Apple Maps only supports one destination — exporting From → To', 'ok')
+          },
+        },
+      )
 
       // Clear previous markers if this is a background refresh
       if (cached) {
