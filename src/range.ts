@@ -3,6 +3,19 @@
 import { haversineM, bearingDeg, destinationPoint, type LatLon } from './geo.ts'
 import type { Vehicle } from './data/vehicles.ts'
 
+/** Slice coords and cumDistKm for a single leg, returning leg-relative distances. */
+function legSlice(
+  coords: LatLon[],
+  cumDistKm: number[],
+  startIdx: number,
+  endIdx: number,
+): { coords: LatLon[]; cumDistKm: number[] } {
+  const sliceCoords = coords.slice(startIdx, endIdx + 1)
+  const offset = cumDistKm[startIdx]
+  const sliceCum = cumDistKm.slice(startIdx, endIdx + 1).map((d) => d - offset)
+  return { coords: sliceCoords, cumDistKm: sliceCum }
+}
+
 /** Usable range from current charge level. */
 export function effectiveRangeKm(vehicle: Vehicle, chargePercent: number): number {
   return vehicle.wltpRangeKm * (chargePercent / 100)
@@ -84,6 +97,56 @@ export function coloredRouteSegments(
 export interface TerminatorLine {
   point: LatLon
   ends: [LatLon, LatLon]
+}
+
+/**
+ * Colors a multi-leg route where each leg resets to its own starting charge.
+ * chargePercents[i] is the starting charge for leg i; if fewer entries than
+ * legs, the last entry is reused for remaining legs.
+ */
+export function multiLegColoredSegments(
+  coords: LatLon[],
+  cumDistKm: number[],
+  legEndIndices: number[],
+  vehicle: Vehicle,
+  chargePercents: number[],
+): RouteSegment[] {
+  const segments: RouteSegment[] = []
+  let legStart = 0
+  for (let i = 0; i < legEndIndices.length; i++) {
+    const legEnd = legEndIndices[i]
+    const pct = chargePercents[Math.min(i, chargePercents.length - 1)]
+    const rangeKm = effectiveRangeKm(vehicle, pct)
+    const { coords: lc, cumDistKm: ld } = legSlice(coords, cumDistKm, legStart, legEnd)
+    const legSegs = coloredRouteSegments(lc, ld, rangeKm)
+    segments.push(...legSegs)
+    legStart = legEnd
+  }
+  return segments
+}
+
+/**
+ * Returns the first range-limit terminator across all legs, or null if every
+ * leg fits within its starting charge range.
+ */
+export function computeMultiLegTerminator(
+  coords: LatLon[],
+  cumDistKm: number[],
+  legEndIndices: number[],
+  vehicle: Vehicle,
+  chargePercents: number[],
+): TerminatorLine | null {
+  let legStart = 0
+  for (let i = 0; i < legEndIndices.length; i++) {
+    const legEnd = legEndIndices[i]
+    const pct = chargePercents[Math.min(i, chargePercents.length - 1)]
+    const rangeKm = effectiveRangeKm(vehicle, pct)
+    const { coords: lc, cumDistKm: ld } = legSlice(coords, cumDistKm, legStart, legEnd)
+    const t = computeTerminator(lc, ld, rangeKm)
+    if (t) return t
+    legStart = legEnd
+  }
+  return null
 }
 
 /**
