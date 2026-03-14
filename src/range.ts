@@ -36,7 +36,7 @@ export function pointAtDistanceKm(
       ]
     }
   }
-  return null
+  throw new Error('pointAtDistanceKm: no segment found — cumDistKm array is inconsistent')
 }
 
 /** Color representing a charge level ratio (0–1). */
