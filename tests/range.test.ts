@@ -6,6 +6,8 @@ import {
   chargeColor,
   coloredRouteSegments,
   computeTerminator,
+  multiLegColoredSegments,
+  computeMultiLegTerminator,
 } from '../src/range.ts'
 import type { LatLon } from '../src/geo.ts'
 import type { Vehicle } from '../src/data/vehicles.ts'
@@ -162,5 +164,86 @@ describe('computeTerminator', () => {
     expect(t!.ends).toHaveLength(2)
     // Ends should be offset from the terminator point
     expect(t!.ends[0]).not.toEqual(t!.ends[1])
+  })
+})
+
+// Two-leg route: [51,0]→[52,0]→[53,0] is leg 0 (2 segments ~111km each),
+// [53,0]→[54,0]→[55,0] is leg 1.
+// legEndIndices = [2, 4] for a 5-point route.
+const TWO_LEG_ROUTE: LatLon[] = [
+  [51.0, 0.0],
+  [52.0, 0.0],
+  [53.0, 0.0],
+  [54.0, 0.0],
+  [55.0, 0.0],
+]
+
+describe('multiLegColoredSegments', () => {
+  it('returns segments covering the whole route', () => {
+    const cum = cumulativeDistancesKm(TWO_LEG_ROUTE)
+    const segs = multiLegColoredSegments(TWO_LEG_ROUTE, cum, [2, 4], CAR, [100, 100])
+    const allCoords = segs.flatMap((s) => s.coords)
+    // First coord of first segment = first route point
+    expect(allCoords[0]).toEqual(TWO_LEG_ROUTE[0])
+    // Last coord of last segment = last route point
+    expect(allCoords.at(-1)).toEqual(TWO_LEG_ROUTE.at(-1))
+  })
+
+  it('uses full range for each leg independently', () => {
+    const cum = cumulativeDistancesKm(TWO_LEG_ROUTE)
+    // Both legs start at 100% with a 400km car — no grey expected
+    const segs = multiLegColoredSegments(TWO_LEG_ROUTE, cum, [2, 4], CAR, [100, 100])
+    expect(segs.every((s) => s.color !== '#4b5563')).toBe(true)
+  })
+
+  it('shows grey on second leg when that leg exceeds range', () => {
+    const shortRangeCar: Vehicle = { ...CAR, wltpRangeKm: 100 }
+    const cum = cumulativeDistancesKm(TWO_LEG_ROUTE)
+    // Leg 1 starts at 100% but is ~222km — grey expected on second leg
+    const segs = multiLegColoredSegments(TWO_LEG_ROUTE, cum, [2, 4], shortRangeCar, [100, 100])
+    expect(segs.some((s) => s.color === '#4b5563')).toBe(true)
+  })
+
+  it('falls back to single-leg behaviour when chargePercents has one entry', () => {
+    const cum = cumulativeDistancesKm(TWO_LEG_ROUTE)
+    const segs = multiLegColoredSegments(TWO_LEG_ROUTE, cum, [2, 4], CAR, [100])
+    expect(segs.length).toBeGreaterThan(0)
+  })
+})
+
+describe('computeMultiLegTerminator', () => {
+  it('returns null when all legs fit within range', () => {
+    const cum = cumulativeDistancesKm(TWO_LEG_ROUTE)
+    const t = computeMultiLegTerminator(TWO_LEG_ROUTE, cum, [2, 4], CAR, [100, 100])
+    expect(t).toBeNull()
+  })
+
+  it('returns terminator on first leg that exceeds range', () => {
+    const shortRangeCar: Vehicle = { ...CAR, wltpRangeKm: 100 }
+    const cum = cumulativeDistancesKm(TWO_LEG_ROUTE)
+    // Leg 0 is ~222km, car range 100km — terminator should be within leg 0
+    const t = computeMultiLegTerminator(TWO_LEG_ROUTE, cum, [2, 4], shortRangeCar, [100, 100])
+    expect(t).not.toBeNull()
+    // Terminator point must be in the lat range of leg 0 (51–53)
+    expect(t!.point[0]).toBeGreaterThan(51.0)
+    expect(t!.point[0]).toBeLessThan(53.0)
+  })
+
+  it('ignores earlier legs if only the second exceeds range', () => {
+    // Leg 0 = 1 step (~111km), leg 1 = 3 steps (~333km), range = 150km
+    const threeStepRoute: LatLon[] = [
+      [51.0, 0.0],
+      [52.0, 0.0], // leg 0 end
+      [53.0, 0.0],
+      [54.0, 0.0],
+      [55.0, 0.0], // leg 1 end
+    ]
+    const shortRangeCar: Vehicle = { ...CAR, wltpRangeKm: 150 }
+    const cum = cumulativeDistancesKm(threeStepRoute)
+    const t = computeMultiLegTerminator(threeStepRoute, cum, [1, 4], shortRangeCar, [100, 100])
+    expect(t).not.toBeNull()
+    // Terminator should be on leg 1 (lat > 52)
+    expect(t!.point[0]).toBeGreaterThan(52.0)
+    expect(t!.point[0]).toBeLessThan(55.0)
   })
 })
