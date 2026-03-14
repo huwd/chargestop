@@ -238,7 +238,7 @@ async function runPlan(): Promise<void> {
 
     step('route')
     status('Calculating route…')
-    const routeCoords = await getRoute(fromCoord, toCoord)
+    const { coords: routeCoords } = await getRoute([fromCoord, toCoord])
     const routeSampled = downsampleRoute(routeCoords, 400)
 
     // Draw route — colored by charge level if a vehicle is selected, plain yellow otherwise
