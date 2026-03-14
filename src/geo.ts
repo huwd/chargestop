@@ -81,6 +81,31 @@ export function destinationPoint(origin: LatLon, bearDeg: number, distKm: number
 }
 
 /**
+ * Best index at which to insert `point` into `waypoints` to minimise the
+ * added detour. Returns a value in [1, waypoints.length].
+ *
+ * For each consecutive segment (waypoints[i] → waypoints[i+1]) the marginal
+ * detour of inserting `point` between them is:
+ *   haversine(A, P) + haversine(P, B) − haversine(A, B)
+ * The segment with the smallest marginal detour wins.
+ */
+export function findInsertPosition(waypoints: LatLon[], point: LatLon): number {
+  if (waypoints.length <= 1) return 1
+  let bestIdx = 1
+  let bestDetour = Infinity
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const a = waypoints[i]
+    const b = waypoints[i + 1]
+    const detour = haversineM(a, point) + haversineM(point, b) - haversineM(a, b)
+    if (detour < bestDetour) {
+      bestDetour = detour
+      bestIdx = i + 1
+    }
+  }
+  return bestIdx
+}
+
+/**
  * Compute a bounding box from route coords with a padding of `padKm` kilometres.
  */
 export function routeBBox(coords: LatLon[], padKm: number): BBox {

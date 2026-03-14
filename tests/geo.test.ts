@@ -4,6 +4,7 @@ import {
   downsampleRoute,
   minDistToRouteKm,
   routeBBox,
+  findInsertPosition,
   type LatLon,
 } from '../src/geo.ts'
 
@@ -73,6 +74,52 @@ describe('minDistToRouteKm', () => {
     // at 51°N, 1° longitude ≈ ~70km; 1° latitude ≈ 111km; closest is (51,0) => ~70km
     expect(dist).toBeGreaterThan(60)
     expect(dist).toBeLessThan(80)
+  })
+})
+
+describe('findInsertPosition', () => {
+  // North-south route: London → Birmingham → Manchester → Edinburgh
+  const LONDON: LatLon = [51.5, -0.1]
+  const BIRMINGHAM: LatLon = [52.5, -1.9]
+  const MANCHESTER: LatLon = [53.5, -2.2]
+  const EDINBURGH: LatLon = [55.9, -3.2]
+
+  it('returns 1 for only two waypoints', () => {
+    const pos = findInsertPosition([LONDON, EDINBURGH], BIRMINGHAM)
+    expect(pos).toBe(1)
+  })
+
+  it('inserts between first pair when new point is near that segment', () => {
+    // Coventry is between London and Birmingham
+    const COVENTRY: LatLon = [52.4, -1.5]
+    const pos = findInsertPosition([LONDON, BIRMINGHAM, EDINBURGH], COVENTRY)
+    expect(pos).toBe(1)
+  })
+
+  it('inserts between second pair when new point is near that segment', () => {
+    // Leeds is between Manchester and Edinburgh
+    const LEEDS: LatLon = [53.8, -1.5]
+    const pos = findInsertPosition([LONDON, BIRMINGHAM, MANCHESTER, EDINBURGH], LEEDS)
+    expect(pos).toBe(3)
+  })
+
+  it('inserts after last waypoint when that segment minimises detour', () => {
+    // Inverness is far north; inserting between BIRMINGHAM→MANCHESTER costs
+    // less total detour than inserting between LONDON→BIRMINGHAM, so pos = 2
+    const INVERNESS: LatLon = [57.5, -4.2]
+    const pos = findInsertPosition([LONDON, BIRMINGHAM, MANCHESTER], INVERNESS)
+    expect(pos).toBe(2)
+  })
+
+  it('is deterministic for equidistant points', () => {
+    const A: LatLon = [51.0, 0.0]
+    const B: LatLon = [52.0, 0.0]
+    const C: LatLon = [53.0, 0.0]
+    // Mid of A–B vs mid of B–C: both add same marginal distance
+    // Should consistently pick first segment
+    const mid: LatLon = [51.5, 0.0]
+    const pos = findInsertPosition([A, B, C], mid)
+    expect(pos).toBe(1)
   })
 })
 
