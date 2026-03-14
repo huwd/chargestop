@@ -14,6 +14,7 @@ import {
 } from './filters.ts'
 import {
   setStatus,
+  setPlanStep,
   buildChargerCard,
   renderFoodList,
   initDrawer,
@@ -45,12 +46,15 @@ const planBtn = document.getElementById('plan-btn') as HTMLButtonElement
 const statusMsg = document.getElementById('status-msg') as HTMLElement
 const statusDot = document.getElementById('status-dot') as HTMLElement
 const resultsDiv = document.getElementById('results') as HTMLElement
+const planSteps = document.getElementById('plan-steps') as HTMLElement
 const sidebar = document.getElementById('sidebar') as HTMLElement
 const drawerToggle = document.getElementById('drawer-toggle') as HTMLButtonElement
 const sidebarHeader = document.getElementById('sidebar-header') as HTMLElement
 
 const status = (msg: string, state: Parameters<typeof setStatus>[3] = 'active'): void =>
   setStatus(statusMsg, statusDot, msg, state)
+const step = (s: Parameters<typeof setPlanStep>[1], fromCache = false): void =>
+  setPlanStep(planSteps, s, fromCache)
 
 // ─── Vehicle picker ───────────────────────────────────────────────────────────
 
@@ -218,9 +222,11 @@ async function runPlan(): Promise<void> {
   )
 
   try {
+    step('geocode')
     status('Geocoding locations…')
     const [fromCoord, toCoord] = await Promise.all([geocode(fromStr), geocode(toStr)])
 
+    step('route')
     status('Calculating route…')
     const routeCoords = await getRoute(fromCoord, toCoord)
     const routeSampled = downsampleRoute(routeCoords, 400)
@@ -244,58 +250,83 @@ async function runPlan(): Promise<void> {
       map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] })
     }
 
-    status('Querying OSM for charging stations…')
-    const bbox = routeBBox(routeCoords, detourKm)
-    const chargerData = await overpass(buildChargerQuery(bbox, vehicle?.chargePortType))
-
-    let nearbyChargers = chargerData.elements.filter(
-      (c) => minDistToRouteKm([c.lat, c.lon], routeSampled) <= detourKm,
+    const chargerQuery = buildChargerQuery(
+      routeBBox(routeCoords, detourKm),
+      vehicle?.chargePortType,
     )
-    if (vehicle) {
-      nearbyChargers = nearbyChargers.filter((c) => matchesVehiclePort(c, vehicle.chargePortType))
-    }
-    const fastOnly = nearbyChargers.filter((c) => isFastCharger(c.tags))
-    const displayChargers = fastOnly.length > 0 ? fastOnly : nearbyChargers
+    step('chargers')
+    status('Querying OSM for charging stations…')
 
-    if (displayChargers.length === 0) {
-      status(`No chargers found within ${detourKm}km — try increasing detour`, 'err')
-      resultsDiv.innerHTML = `<div class="empty-state"><div class="big">😞</div><div>No chargers found.<br>Try a wider detour.</div></div>`
-      return
-    }
-
-    const label =
-      fastOnly.length > 0
-        ? `${displayChargers.length} fast charger${displayChargers.length !== 1 ? 's' : ''} found`
-        : `${displayChargers.length} charger${displayChargers.length !== 1 ? 's' : ''} (slow) found`
-
-    const vehicleLabel = vehicle
-      ? ` · ${vehicle.make} ${vehicle.model} · ${effectiveRangeKm(vehicle, chargePercent).toFixed(0)}km range`
-      : ''
-    status(label + ' — click any to find food', 'ok')
-
-    resultsDiv.innerHTML = `<div class="section-label" style="margin-bottom:10px">${label}${vehicleLabel} · ${detourKm}km detour · food within ${foodRadiusM}m</div>`
-
-    displayChargers.forEach((c) => {
-      const name = c.tags.name ?? c.tags.operator ?? 'Charging Station'
-      const network = c.tags.network ?? c.tags.operator ?? ''
-      const sockets = getChargerSockets(c.tags)
-
-      const card = buildChargerCard(c, sockets)
-      const marker = makeChargerMarker(c.lat, c.lon)
-      marker.bindPopup(
-        `<b>${name}</b><br>${network ? network + '<br>' : ''}` +
-          `${sockets.join(' · ') || 'AC'}<br>` +
-          `<i style="color:#6b7280;font-size:0.85em">Click sidebar card to find food</i>`,
+    const renderChargers = (
+      chargerData: import('./overpass.ts').OverpassResponse,
+      cached: boolean,
+    ): void => {
+      let nearbyChargers = chargerData.elements.filter(
+        (c) => minDistToRouteKm([c.lat, c.lon], routeSampled) <= detourKm,
       )
-      marker.addTo(map)
-      chargerMarkers.push(marker)
+      if (vehicle) {
+        nearbyChargers = nearbyChargers.filter((c) => matchesVehiclePort(c, vehicle.chargePortType))
+      }
+      const fastOnly = nearbyChargers.filter((c) => isFastCharger(c.tags))
+      const displayChargers = fastOnly.length > 0 ? fastOnly : nearbyChargers
 
-      attachFoodLoader(c, card, marker, foodRadiusM, indieOnly)
-      resultsDiv.appendChild(card)
+      if (displayChargers.length === 0) {
+        status(`No chargers found within ${detourKm}km — try increasing detour`, 'err')
+        resultsDiv.innerHTML = `<div class="empty-state"><div class="big">😞</div><div>No chargers found.<br>Try a wider detour.</div></div>`
+        return
+      }
+
+      const label =
+        fastOnly.length > 0
+          ? `${displayChargers.length} fast charger${displayChargers.length !== 1 ? 's' : ''} found`
+          : `${displayChargers.length} charger${displayChargers.length !== 1 ? 's' : ''} (slow) found`
+
+      const vehicleLabel = vehicle
+        ? ` · ${vehicle.make} ${vehicle.model} · ${effectiveRangeKm(vehicle, chargePercent).toFixed(0)}km range`
+        : ''
+      const cacheLabel = cached ? ' ⚡' : ''
+      status(label + ' — click any to find food' + cacheLabel, 'ok')
+      step('done')
+
+      // Clear previous markers if this is a background refresh
+      if (cached) {
+        chargerMarkers.forEach((m) => map.removeLayer(m))
+        chargerMarkers = []
+        resultsDiv.innerHTML = ''
+      }
+
+      resultsDiv.innerHTML = `<div class="section-label" style="margin-bottom:10px">${label}${vehicleLabel} · ${detourKm}km detour · food within ${foodRadiusM}m</div>`
+
+      displayChargers.forEach((c, i) => {
+        const name = c.tags.name ?? c.tags.operator ?? 'Charging Station'
+        const network = c.tags.network ?? c.tags.operator ?? ''
+        const sockets = getChargerSockets(c.tags)
+
+        const card = buildChargerCard(c, sockets)
+        const marker = makeChargerMarker(c.lat, c.lon)
+        marker.bindPopup(
+          `<b>${name}</b><br>${network ? network + '<br>' : ''}` +
+            `${sockets.join(' · ') || 'AC'}<br>` +
+            `<i style="color:#6b7280;font-size:0.85em">Click sidebar card to find food</i>`,
+        )
+        setTimeout(() => {
+          marker.addTo(map)
+          chargerMarkers.push(marker)
+        }, i * 40)
+
+        attachFoodLoader(c, card, marker, foodRadiusM, indieOnly)
+        resultsDiv.appendChild(card)
+      })
+    }
+
+    const chargerData = await overpass(chargerQuery, undefined, {
+      onRefresh: (fresh) => renderChargers(fresh, true),
     })
+    renderChargers(chargerData, false)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     status(`Error: ${msg}`, 'err')
+    step('idle')
     resultsDiv.innerHTML = `<div class="empty-state"><div class="big">⚠️</div><div>${msg}</div></div>`
   } finally {
     planBtn.disabled = false

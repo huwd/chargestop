@@ -20,6 +20,39 @@ export function populateVehiclePicker(selectEl: HTMLSelectElement): void {
   }
 }
 
+// ─── Plan step indicator ─────────────────────────────────────────────────────
+
+export type PlanStep = 'geocode' | 'route' | 'chargers'
+
+/**
+ * Marks a step as active, done, or cached (instant from cache).
+ * All earlier steps are automatically set to done.
+ */
+export function setPlanStep(
+  stepsEl: HTMLElement,
+  step: PlanStep | 'done' | 'idle',
+  fromCache = false,
+): void {
+  const order: PlanStep[] = ['geocode', 'route', 'chargers']
+  stepsEl.classList.toggle('visible', step !== 'idle')
+  if (step === 'idle' || step === 'done') {
+    order.forEach((s) => {
+      const el = stepsEl.querySelector(`#step-${s}`)
+      if (!el) return
+      el.className = step === 'done' ? 'plan-step done' : 'plan-step'
+    })
+    return
+  }
+  const idx = order.indexOf(step)
+  order.forEach((s, i) => {
+    const el = stepsEl.querySelector(`#step-${s}`)
+    if (!el) return
+    if (i < idx) el.className = 'plan-step done'
+    else if (i === idx) el.className = fromCache ? 'plan-step cached' : 'plan-step active'
+    else el.className = 'plan-step'
+  })
+}
+
 // ─── Status bar ──────────────────────────────────────────────────────────────
 
 export type StatusState = 'idle' | 'active' | 'ok' | 'err'
