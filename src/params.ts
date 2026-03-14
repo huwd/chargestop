@@ -7,6 +7,7 @@ export interface RouteParams {
   foodRadius: number
   vehicleId: string
   chargePercent: number
+  indieOnly: boolean
 }
 
 const PLACE_MAX_LEN = 100
@@ -77,6 +78,10 @@ export function parseUrlParams(search: string): Partial<RouteParams> {
     if (n !== null) result.chargePercent = n
   }
 
+  const indie = p.get('indie')
+  if (indie === '0') result.indieOnly = false
+  else if (indie === '1') result.indieOnly = true
+
   return result
 }
 
@@ -87,6 +92,7 @@ export function buildUrlSearch(
   foodRadius: number,
   vehicleId?: string,
   chargePercent?: number,
+  indieOnly?: boolean,
 ): string {
   const params: Record<string, string> = {
     from,
@@ -96,5 +102,6 @@ export function buildUrlSearch(
   }
   if (vehicleId) params.vehicle = vehicleId
   if (chargePercent !== undefined) params.charge = String(chargePercent)
+  if (indieOnly === false) params.indie = '0'
   return '?' + new URLSearchParams(params).toString()
 }

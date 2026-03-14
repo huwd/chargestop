@@ -152,6 +152,25 @@ describe('parseUrlParams — vehicle params', () => {
   })
 })
 
+describe('parseUrlParams — indie param', () => {
+  it('parses indie=0 as indieOnly false', () => {
+    expect(parseUrlParams('?indie=0').indieOnly).toBe(false)
+  })
+
+  it('parses indie=1 as indieOnly true', () => {
+    expect(parseUrlParams('?indie=1').indieOnly).toBe(true)
+  })
+
+  it('omits indieOnly when param is absent', () => {
+    expect(parseUrlParams('').indieOnly).toBeUndefined()
+  })
+
+  it('ignores invalid indie values', () => {
+    expect(parseUrlParams('?indie=maybe').indieOnly).toBeUndefined()
+    expect(parseUrlParams('?indie=2').indieOnly).toBeUndefined()
+  })
+})
+
 describe('buildUrlSearch', () => {
   it('builds a round-trippable query string', () => {
     const qs = buildUrlSearch('Luton', 'Newquay', 5, 150)
@@ -174,5 +193,16 @@ describe('buildUrlSearch', () => {
     const r = parseUrlParams(qs)
     expect(r.vehicleId).toBe('tesla-model-3-lr-2023')
     expect(r.chargePercent).toBe(80)
+  })
+
+  it('omits indie param when indieOnly is true (default)', () => {
+    const qs = buildUrlSearch('London', 'Edinburgh', 5, 150, undefined, undefined, true)
+    expect(qs).not.toContain('indie')
+  })
+
+  it('includes indie=0 when indieOnly is false', () => {
+    const qs = buildUrlSearch('London', 'Edinburgh', 5, 150, undefined, undefined, false)
+    expect(qs).toContain('indie=0')
+    expect(parseUrlParams(qs).indieOnly).toBe(false)
   })
 })

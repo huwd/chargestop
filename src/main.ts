@@ -39,6 +39,7 @@ const foodVal = document.getElementById('food-val') as HTMLElement
 const chargeSlider = document.getElementById('charge-slider') as HTMLInputElement
 const chargeVal = document.getElementById('charge-val') as HTMLElement
 const chargeRow = document.getElementById('charge-row') as HTMLElement
+const indieToggle = document.getElementById('indie-toggle') as HTMLInputElement
 const vehicleSelect = document.getElementById('vehicle-select') as HTMLSelectElement
 const planBtn = document.getElementById('plan-btn') as HTMLButtonElement
 const statusMsg = document.getElementById('status-msg') as HTMLElement
@@ -113,6 +114,7 @@ function attachFoodLoader(
   card: HTMLElement,
   marker: L.Marker,
   foodRadiusM: number,
+  indieOnly: boolean,
 ): void {
   let foodLoaded = false
 
@@ -132,7 +134,8 @@ function attachFoodLoader(
     const foodDiv = document.getElementById(`food-${charger.id}`)
     if (!foodDiv) return
     foodDiv.classList.add('open')
-    foodDiv.innerHTML = '<div class="food-searching">Searching for indie food…</div>'
+    const searchingMsg = indieOnly ? 'Searching for indie food…' : 'Searching for food…'
+    foodDiv.innerHTML = `<div class="food-searching">${searchingMsg}</div>`
 
     map.setView([charger.lat, charger.lon], 15, { animate: true })
     marker.openPopup()
@@ -140,7 +143,7 @@ function attachFoodLoader(
     try {
       const query = buildFoodQuery(charger.lat, charger.lon, foodRadiusM)
       const data = await overpass(query)
-      const foods = data.elements.filter(isIndieFood)
+      const foods = indieOnly ? data.elements.filter(isIndieFood) : data.elements
       foodLoaded = true
 
       if (foods.length > 0) {
@@ -157,22 +160,25 @@ function attachFoodLoader(
       }
 
       const chargerName = charger.tags.name ?? charger.tags.operator ?? 'Charging Station'
-      foodDiv.innerHTML = renderFoodList(foods, [charger.lat, charger.lon], foodRadiusM)
+      foodDiv.innerHTML = renderFoodList(foods, [charger.lat, charger.lon], foodRadiusM, indieOnly)
 
       foods.forEach((f) => {
         const fm = makeFoodMarker(f.lat, f.lon, f.tags.amenity ?? '')
         const cuisine = f.tags.cuisine ? ` · ${f.tags.cuisine}` : ''
+        const indieNote = indieOnly
+          ? '<br><i style="color:#6b7280;font-size:0.85em">✓ No brand tag — likely indie</i>'
+          : ''
         fm.bindPopup(
           `<b style="color:#5ecf8a">${f.tags.name ?? 'Unnamed'}</b><br>` +
-            `${f.tags.amenity ?? ''}${cuisine}<br>` +
-            `<i style="color:#6b7280;font-size:0.85em">✓ No brand tag — likely indie</i>`,
+            `${f.tags.amenity ?? ''}${cuisine}${indieNote}`,
         )
         fm.addTo(map)
         foodMarkers.push(fm)
       })
 
+      const placeLabel = indieOnly ? 'indie place' : 'place'
       status(
-        `${foods.length} indie place${foods.length !== 1 ? 's' : ''} near ${chargerName}`,
+        `${foods.length} ${placeLabel}${foods.length !== 1 ? 's' : ''} near ${chargerName}`,
         'ok',
       )
     } catch (e) {
@@ -200,6 +206,7 @@ async function runPlan(): Promise<void> {
   const foodRadiusM = parseFloat(foodSlider.value)
   const vehicle = selectedVehicle()
   const chargePercent = parseInt(chargeSlider.value, 10)
+  const indieOnly = indieToggle.checked
 
   planBtn.disabled = true
   clearAll()
@@ -207,7 +214,7 @@ async function runPlan(): Promise<void> {
   history.replaceState(
     null,
     '',
-    buildUrlSearch(fromStr, toStr, detourKm, foodRadiusM, vehicle?.id, chargePercent),
+    buildUrlSearch(fromStr, toStr, detourKm, foodRadiusM, vehicle?.id, chargePercent, indieOnly),
   )
 
   try {
@@ -283,7 +290,7 @@ async function runPlan(): Promise<void> {
       marker.addTo(map)
       chargerMarkers.push(marker)
 
-      attachFoodLoader(c, card, marker, foodRadiusM)
+      attachFoodLoader(c, card, marker, foodRadiusM, indieOnly)
       resultsDiv.appendChild(card)
     })
   } catch (e) {
@@ -328,6 +335,9 @@ if (savedVehicleId) {
 if (urlParams.chargePercent !== undefined) {
   chargeSlider.value = String(urlParams.chargePercent)
   chargeVal.textContent = String(urlParams.chargePercent)
+}
+if (urlParams.indieOnly === false) {
+  indieToggle.checked = false
 }
 
 if (urlParams.from && urlParams.to) void runPlan()
