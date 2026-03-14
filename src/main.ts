@@ -172,12 +172,66 @@ function attachFoodLoader(
   card: HTMLElement,
   marker: L.Marker,
   foodRadiusM: number,
-  indieOnly: boolean,
 ): void {
-  let foodLoaded = false
+  let cachedData: import('./overpass.ts').OverpassResponse | null = null
+  let lastRenderedIndie: boolean | null = null
+
+  const chargerName = charger.tags.name ?? charger.tags.operator ?? 'Charging Station'
+
+  const renderFood = (data: import('./overpass.ts').OverpassResponse): void => {
+    const indieOnly = indieToggle.checked
+    cachedData = data
+    lastRenderedIndie = indieOnly
+
+    const foods = indieOnly ? data.elements.filter(isIndieFood) : data.elements
+    const foodDiv = document.getElementById(`food-${charger.id}`)
+    if (!foodDiv) return
+
+    if (foods.length > 0) {
+      map.removeLayer(marker)
+      const newMarker = makeChargerMarker(charger.lat, charger.lon, true)
+      newMarker.bindPopup(marker.getPopup() ?? '')
+      newMarker.addTo(map)
+      chargerMarkers = chargerMarkers.filter((m) => m !== marker)
+      chargerMarkers.push(newMarker)
+      newMarker.on('click', () => {
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        void loadFood()
+      })
+    }
+
+    foodMarkers.forEach((m) => map.removeLayer(m))
+    foodMarkers = []
+    foodDiv.innerHTML = renderFoodList(foods, [charger.lat, charger.lon], foodRadiusM, indieOnly)
+
+    foods.forEach((f) => {
+      const fm = makeFoodMarker(f.lat, f.lon, f.tags.amenity ?? '')
+      const cuisine = f.tags.cuisine ? ` · ${f.tags.cuisine}` : ''
+      const indieNote = indieOnly
+        ? '<br><i style="color:#6b7280;font-size:0.85em">✓ No brand tag — likely indie</i>'
+        : ''
+      fm.bindPopup(
+        `<b style="color:#5ecf8a">${f.tags.name ?? 'Unnamed'}</b><br>` +
+          `${f.tags.amenity ?? ''}${cuisine}${indieNote}`,
+      )
+      fm.addTo(map)
+      foodMarkers.push(fm)
+    })
+
+    const placeLabel = indieOnly ? 'indie place' : 'place'
+    status(
+      `${foods.length} ${placeLabel}${foods.length !== 1 ? 's' : ''} near ${chargerName}`,
+      'ok',
+    )
+  }
 
   const loadFood = async (): Promise<void> => {
-    if (card.classList.contains('active') && foodLoaded) {
+    const indieOnly = indieToggle.checked
+    const isActive = card.classList.contains('active')
+    const toggleChanged = lastRenderedIndie !== null && lastRenderedIndie !== indieOnly
+
+    // Close if already showing the same result set
+    if (isActive && !toggleChanged) {
       card.classList.remove('active')
       document.getElementById(`food-${charger.id}`)?.classList.remove('open')
       clearFoodMarkers()
@@ -193,55 +247,18 @@ function attachFoodLoader(
     if (!foodDiv) return
     foodDiv.classList.add('open')
 
-    const chargerName = charger.tags.name ?? charger.tags.operator ?? 'Charging Station'
+    // Re-render from cache if only the toggle changed — no new fetch needed
+    if (cachedData && toggleChanged) {
+      renderFood(cachedData)
+      return
+    }
+
     const searchingMsg = indieOnly ? 'Searching for indie food…' : 'Searching for food…'
     foodDiv.innerHTML = `<div class="food-searching">${searchingMsg}</div>`
     status(`Searching for food near ${chargerName}…`, 'active')
 
     map.setView([charger.lat, charger.lon], 15, { animate: true })
     marker.openPopup()
-
-    const renderFood = (data: import('./overpass.ts').OverpassResponse): void => {
-      const foods = indieOnly ? data.elements.filter(isIndieFood) : data.elements
-      foodLoaded = true
-
-      if (foods.length > 0) {
-        map.removeLayer(marker)
-        const newMarker = makeChargerMarker(charger.lat, charger.lon, true)
-        newMarker.bindPopup(marker.getPopup() ?? '')
-        newMarker.addTo(map)
-        chargerMarkers = chargerMarkers.filter((m) => m !== marker)
-        chargerMarkers.push(newMarker)
-        newMarker.on('click', () => {
-          card.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-          void loadFood()
-        })
-      }
-
-      foodMarkers.forEach((m) => map.removeLayer(m))
-      foodMarkers = []
-      foodDiv.innerHTML = renderFoodList(foods, [charger.lat, charger.lon], foodRadiusM, indieOnly)
-
-      foods.forEach((f) => {
-        const fm = makeFoodMarker(f.lat, f.lon, f.tags.amenity ?? '')
-        const cuisine = f.tags.cuisine ? ` · ${f.tags.cuisine}` : ''
-        const indieNote = indieOnly
-          ? '<br><i style="color:#6b7280;font-size:0.85em">✓ No brand tag — likely indie</i>'
-          : ''
-        fm.bindPopup(
-          `<b style="color:#5ecf8a">${f.tags.name ?? 'Unnamed'}</b><br>` +
-            `${f.tags.amenity ?? ''}${cuisine}${indieNote}`,
-        )
-        fm.addTo(map)
-        foodMarkers.push(fm)
-      })
-
-      const placeLabel = indieOnly ? 'indie place' : 'place'
-      status(
-        `${foods.length} ${placeLabel}${foods.length !== 1 ? 's' : ''} near ${chargerName}`,
-        'ok',
-      )
-    }
 
     try {
       const query = buildFoodQuery(charger.lat, charger.lon, foodRadiusM)
@@ -264,6 +281,13 @@ function attachFoodLoader(
   marker.on('click', () => {
     card.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     void loadFood()
+  })
+
+  // Re-render immediately when the indie toggle changes while this card is active
+  indieToggle.addEventListener('change', () => {
+    if (card.classList.contains('active') && cachedData) {
+      renderFood(cachedData)
+    }
   })
 
   // "Add to route" button
@@ -424,7 +448,7 @@ async function runPlan(): Promise<void> {
           chargerMarkers.push(marker)
         }, i * 40)
 
-        attachFoodLoader(c, card, marker, foodRadiusM, indieOnly)
+        attachFoodLoader(c, card, marker, foodRadiusM)
         resultsDiv.appendChild(card)
       })
     }
