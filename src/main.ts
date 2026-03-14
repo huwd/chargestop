@@ -19,6 +19,7 @@ import {
   renderFoodList,
   initDrawer,
   populateVehiclePicker,
+  renderWaypointList,
 } from './ui.ts'
 import { parseUrlParams, buildUrlSearch } from './params.ts'
 import { findVehicle, type Vehicle } from './data/vehicles.ts'
@@ -27,19 +28,28 @@ import {
   cumulativeDistancesKm,
   coloredRouteSegments,
   computeTerminator,
+  multiLegColoredSegments,
+  computeMultiLegTerminator,
 } from './range.ts'
+import {
+  makeWaypointList,
+  insertWaypoint,
+  removeWaypoint,
+  reverseWaypoints,
+  canAddWaypoint,
+  type WaypointList,
+} from './waypoints.ts'
+import { findInsertPosition as findWpInsertPos } from './geo.ts'
 
 // ─── DOM refs ────────────────────────────────────────────────────────────────
 
-const fromInput = document.getElementById('from-input') as HTMLInputElement
-const toInput = document.getElementById('to-input') as HTMLInputElement
+const waypointsListEl = document.getElementById('waypoints-list') as HTMLElement
+const addStopBtn = document.getElementById('add-stop-btn') as HTMLButtonElement
+const reverseBtn = document.getElementById('reverse-btn') as HTMLButtonElement
 const detourSlider = document.getElementById('detour-slider') as HTMLInputElement
 const detourVal = document.getElementById('detour-val') as HTMLElement
 const foodSlider = document.getElementById('food-slider') as HTMLInputElement
 const foodVal = document.getElementById('food-val') as HTMLElement
-const chargeSlider = document.getElementById('charge-slider') as HTMLInputElement
-const chargeVal = document.getElementById('charge-val') as HTMLElement
-const chargeRow = document.getElementById('charge-row') as HTMLElement
 const indieToggle = document.getElementById('indie-toggle') as HTMLInputElement
 const vehicleSelect = document.getElementById('vehicle-select') as HTMLSelectElement
 const planBtn = document.getElementById('plan-btn') as HTMLButtonElement
@@ -67,10 +77,57 @@ function selectedVehicle(): Vehicle | null {
 
 vehicleSelect.addEventListener('change', () => {
   const v = selectedVehicle()
-  chargeRow.classList.toggle('visible', v !== null)
   if (v) localStorage.setItem('chargestop_vehicle', v.id)
   else localStorage.removeItem('chargestop_vehicle')
+  redrawWaypoints()
 })
+
+// ─── Waypoint state ───────────────────────────────────────────────────────────
+
+let wpState: WaypointList = makeWaypointList()
+
+function redrawWaypoints(): void {
+  const showCharge = selectedVehicle() !== null
+  renderWaypointList(waypointsListEl, wpState, showCharge, {
+    onInputChange(idx, value) {
+      wpState = { ...wpState, places: wpState.places.map((p, i) => (i === idx ? value : p)) }
+    },
+    onRemove(idx) {
+      wpState = removeWaypoint(wpState, idx)
+      redrawWaypoints()
+    },
+    onChargeChange(legIdx, value) {
+      const percents = [...wpState.chargePercents]
+      percents[legIdx] = value
+      wpState = { ...wpState, chargePercents: percents }
+    },
+    onDrop(fromIdx, toIdx) {
+      const places = [...wpState.places]
+      const [moved] = places.splice(fromIdx, 1)
+      places.splice(toIdx, 0, moved)
+      // Reset charge percents to defaults after reorder
+      wpState = { ...wpState, places, chargePercents: wpState.chargePercents.map(() => 100) }
+      redrawWaypoints()
+    },
+  })
+  addStopBtn.disabled = !canAddWaypoint(wpState)
+}
+
+addStopBtn.addEventListener('click', () => {
+  wpState = insertWaypoint(wpState, '', wpState.places.length - 1)
+  redrawWaypoints()
+  // Focus the new input
+  const inputs = waypointsListEl.querySelectorAll('.wp-input')
+  const newInput = inputs[inputs.length - 2] as HTMLInputElement | null
+  newInput?.focus()
+})
+
+reverseBtn.addEventListener('click', () => {
+  wpState = reverseWaypoints(wpState)
+  redrawWaypoints()
+})
+
+redrawWaypoints()
 
 // ─── Map state ────────────────────────────────────────────────────────────────
 
@@ -106,9 +163,6 @@ detourSlider.addEventListener('input', () => {
 })
 foodSlider.addEventListener('input', () => {
   foodVal.textContent = foodSlider.value
-})
-chargeSlider.addEventListener('input', () => {
-  chargeVal.textContent = chargeSlider.value
 })
 
 // ─── Food loader (per charger) ────────────────────────────────────────────────
@@ -202,11 +256,39 @@ function attachFoodLoader(
     }
   }
 
-  card.addEventListener('click', () => void loadFood())
+  card.addEventListener('click', (e) => {
+    // Don't trigger food load when clicking the + route button
+    if ((e.target as HTMLElement).closest('.add-to-route-btn')) return
+    void loadFood()
+  })
   marker.on('click', () => {
     card.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     void loadFood()
   })
+
+  // "Add to route" button
+  const addBtn = card.querySelector('.add-to-route-btn') as HTMLButtonElement | null
+  if (addBtn) {
+    addBtn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      const coords: LatLon = [charger.lat, charger.lon]
+      const currentPlaces = wpState.places
+      const insertIdx = findWpInsertPos(
+        currentPlaces
+          .filter((p) => p.trim() !== '')
+          .map((p) => {
+            const m = /^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/.exec(p.trim())
+            if (m) return [parseFloat(m[1]), parseFloat(m[2])] as LatLon
+            return null
+          })
+          .filter((c): c is LatLon => c !== null),
+        coords,
+      )
+      const coordStr = `${charger.lat.toFixed(5)},${charger.lon.toFixed(5)}`
+      wpState = insertWaypoint(wpState, coordStr, insertIdx)
+      redrawWaypoints()
+    })
+  }
 }
 
 // ─── Plan button ─────────────────────────────────────────────────────────────
@@ -214,12 +296,16 @@ function attachFoodLoader(
 planBtn.addEventListener('click', () => void runPlan())
 
 async function runPlan(): Promise<void> {
-  const fromStr = fromInput.value.trim()
-  const toStr = toInput.value.trim()
+  const places = wpState.places.map((p) => p.trim()).filter(Boolean)
+  if (places.length < 2) {
+    status('Enter at least a From and To location', 'err')
+    return
+  }
+
   const detourKm = parseFloat(detourSlider.value)
   const foodRadiusM = parseFloat(foodSlider.value)
   const vehicle = selectedVehicle()
-  const chargePercent = parseInt(chargeSlider.value, 10)
+  const chargePercents = wpState.chargePercents
   const indieOnly = indieToggle.checked
 
   planBtn.disabled = true
@@ -228,25 +314,39 @@ async function runPlan(): Promise<void> {
   history.replaceState(
     null,
     '',
-    buildUrlSearch(fromStr, toStr, detourKm, foodRadiusM, vehicle?.id, chargePercent, indieOnly),
+    buildUrlSearch(
+      places[0],
+      places[places.length - 1],
+      detourKm,
+      foodRadiusM,
+      vehicle?.id,
+      chargePercents[0],
+      indieOnly,
+      places.slice(1, -1),
+      chargePercents,
+    ),
   )
 
   try {
     step('geocode')
     status('Geocoding locations…')
-    const [fromCoord, toCoord] = await Promise.all([geocode(fromStr), geocode(toStr)])
+    const coords = await Promise.all(places.map((p) => geocode(p)))
 
     step('route')
     status('Calculating route…')
-    const { coords: routeCoords } = await getRoute([fromCoord, toCoord])
+    const { coords: routeCoords, legEndIndices } = await getRoute(coords)
     const routeSampled = downsampleRoute(routeCoords, 400)
 
     // Draw route — colored by charge level if a vehicle is selected, plain yellow otherwise
     if (vehicle) {
-      const rangeKm = effectiveRangeKm(vehicle, chargePercent)
       const cumDist = cumulativeDistancesKm(routeCoords)
-      const segments = coloredRouteSegments(routeCoords, cumDist, rangeKm)
-      const terminator = computeTerminator(routeCoords, cumDist, rangeKm)
+      const isMultiLeg = legEndIndices.length > 1
+      const segments = isMultiLeg
+        ? multiLegColoredSegments(routeCoords, cumDist, legEndIndices, vehicle, chargePercents)
+        : coloredRouteSegments(routeCoords, cumDist, effectiveRangeKm(vehicle, chargePercents[0]))
+      const terminator = isMultiLeg
+        ? computeMultiLegTerminator(routeCoords, cumDist, legEndIndices, vehicle, chargePercents)
+        : computeTerminator(routeCoords, cumDist, effectiveRangeKm(vehicle, chargePercents[0]))
       rangeLayer = buildRangeLayer(segments, terminator)
       rangeLayer.addTo(map)
       map.fitBounds(rangeLayer.getBounds(), { padding: [50, 50] })
@@ -292,7 +392,7 @@ async function runPlan(): Promise<void> {
           : `${displayChargers.length} charger${displayChargers.length !== 1 ? 's' : ''} (slow) found`
 
       const vehicleLabel = vehicle
-        ? ` · ${vehicle.make} ${vehicle.model} · ${effectiveRangeKm(vehicle, chargePercent).toFixed(0)}km range`
+        ? ` · ${vehicle.make} ${vehicle.model} · ${effectiveRangeKm(vehicle, chargePercents[0]).toFixed(0)}km range`
         : ''
       const cacheLabel = cached ? ' ⚡' : ''
       status(label + ' — click any to find food' + cacheLabel, 'ok')
@@ -356,8 +456,19 @@ sidebar.addEventListener('transitionend', () => map.invalidateSize())
 // ─── URL params + localStorage ────────────────────────────────────────────────
 
 const urlParams = parseUrlParams(window.location.search)
-if (urlParams.from) fromInput.value = urlParams.from
-if (urlParams.to) toInput.value = urlParams.to
+
+// Build initial waypoint state from URL params
+const fromPlace = urlParams.from ?? ''
+const toPlace = urlParams.to ?? ''
+const vias = urlParams.vias ?? []
+wpState = makeWaypointList()
+wpState = { ...wpState, places: [fromPlace, ...vias, toPlace] }
+if (urlParams.chargePercents && urlParams.chargePercents.length > 0) {
+  wpState = { ...wpState, chargePercents: urlParams.chargePercents }
+} else if (urlParams.chargePercent !== undefined) {
+  wpState = { ...wpState, chargePercents: [urlParams.chargePercent] }
+}
+
 if (urlParams.chargerDistance !== undefined) {
   detourSlider.value = String(urlParams.chargerDistance)
   detourVal.textContent = String(urlParams.chargerDistance)
@@ -371,14 +482,11 @@ if (urlParams.foodRadius !== undefined) {
 const savedVehicleId = urlParams.vehicleId ?? localStorage.getItem('chargestop_vehicle') ?? ''
 if (savedVehicleId) {
   vehicleSelect.value = savedVehicleId
-  vehicleSelect.dispatchEvent(new Event('change'))
-}
-if (urlParams.chargePercent !== undefined) {
-  chargeSlider.value = String(urlParams.chargePercent)
-  chargeVal.textContent = String(urlParams.chargePercent)
 }
 if (urlParams.indieOnly === false) {
   indieToggle.checked = false
 }
+
+redrawWaypoints()
 
 if (urlParams.from && urlParams.to) void runPlan()

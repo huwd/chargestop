@@ -4,6 +4,7 @@ import type { OsmElement, SocketType } from './filters.ts'
 import { formatCuisine, isIndieFood } from './filters.ts'
 import { haversineM, type LatLon } from './geo.ts'
 import { vehiclesByMake } from './data/vehicles.ts'
+import { waypointLabels, type WaypointList } from './waypoints.ts'
 
 export function populateVehiclePicker(selectEl: HTMLSelectElement): void {
   const makes = vehiclesByMake()
@@ -90,6 +91,7 @@ export function buildChargerCard(charger: OsmElement, sockets: SocketType[]): HT
     <div class="charger-meta">
       ${network && network !== name ? `<span>${network}</span>` : ''}
       ${socketTags}
+      <button class="add-to-route-btn" data-charger-id="${charger.id}" title="Add as waypoint">+ route</button>
     </div>
     <div class="food-list" id="food-${charger.id}">
       <div class="food-searching">Click to search nearby food…</div>
@@ -136,6 +138,122 @@ export function renderFoodList(
       </div>`
     })
     .join('')
+}
+
+// ─── Waypoint list UI ────────────────────────────────────────────────────────
+
+/**
+ * Renders the waypoint list into `container`, wiring all interactive events.
+ *
+ * Callbacks:
+ *   onInputChange(idx, value) — user typed in an input
+ *   onRemove(idx)             — user clicked ×
+ *   onChargeChange(legIdx, value) — user moved a per-leg charge slider
+ *   onDrop(fromIdx, toIdx)    — drag-drop reorder
+ */
+export function renderWaypointList(
+  container: HTMLElement,
+  wl: WaypointList,
+  showCharge: boolean,
+  callbacks: {
+    onInputChange: (idx: number, value: string) => void
+    onRemove: (idx: number) => void
+    onChargeChange: (legIdx: number, value: number) => void
+    onDrop: (fromIdx: number, toIdx: number) => void
+  },
+): void {
+  container.innerHTML = ''
+  const labels = waypointLabels(wl)
+  let dragFrom = -1
+
+  wl.places.forEach((place, i) => {
+    const isVia = i > 0 && i < wl.places.length - 1
+
+    const row = document.createElement('div')
+    row.className = 'waypoint-row'
+    row.draggable = true
+    row.dataset.idx = String(i)
+
+    const handle = document.createElement('span')
+    handle.className = 'wp-drag-handle'
+    handle.textContent = '⠿'
+    handle.title = 'Drag to reorder'
+
+    const label = document.createElement('span')
+    label.className = 'wp-label'
+    label.textContent = labels[i]
+
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.className = 'wp-input'
+    input.value = place
+    input.placeholder =
+      i === 0 ? 'e.g. London' : i === wl.places.length - 1 ? 'e.g. Edinburgh' : 'via…'
+    input.addEventListener('input', () => callbacks.onInputChange(i, input.value))
+
+    row.appendChild(handle)
+    row.appendChild(label)
+    row.appendChild(input)
+
+    if (isVia) {
+      const removeBtn = document.createElement('button')
+      removeBtn.className = 'wp-remove-btn'
+      removeBtn.textContent = '×'
+      removeBtn.title = 'Remove stop'
+      removeBtn.addEventListener('click', () => callbacks.onRemove(i))
+      row.appendChild(removeBtn)
+    } else {
+      // Spacer to keep alignment consistent
+      const spacer = document.createElement('span')
+      spacer.style.width = '22px'
+      spacer.style.flexShrink = '0'
+      row.appendChild(spacer)
+    }
+
+    // Drag-drop handlers
+    row.addEventListener('dragstart', () => {
+      dragFrom = i
+      setTimeout(() => row.classList.add('dragging'), 0)
+    })
+    row.addEventListener('dragend', () => {
+      row.classList.remove('dragging')
+      container.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'))
+    })
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault()
+      container.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'))
+      row.classList.add('drag-over')
+    })
+    row.addEventListener('drop', (e) => {
+      e.preventDefault()
+      row.classList.remove('drag-over')
+      if (dragFrom !== -1 && dragFrom !== i) {
+        callbacks.onDrop(dragFrom, i)
+        dragFrom = -1
+      }
+    })
+
+    container.appendChild(row)
+
+    // Per-leg charge slider for each leg origin (all places except the last)
+    if (showCharge && i < wl.places.length - 1) {
+      const chargeRow = document.createElement('div')
+      chargeRow.className = 'wp-charge-row'
+      const pct = wl.chargePercents[i] ?? 100
+      chargeRow.innerHTML = `
+        <label>Charge: <span id="wp-charge-val-${i}">${pct}</span>%</label>
+        <input type="range" min="10" max="100" step="5" value="${pct}"
+               class="wp-charge-slider" data-leg="${i}">
+      `
+      const slider = chargeRow.querySelector('input') as HTMLInputElement
+      const valSpan = chargeRow.querySelector(`#wp-charge-val-${i}`) as HTMLElement
+      slider.addEventListener('input', () => {
+        valSpan.textContent = slider.value
+        callbacks.onChargeChange(i, parseInt(slider.value, 10))
+      })
+      container.appendChild(chargeRow)
+    }
+  })
 }
 
 // ─── Mobile drawer ───────────────────────────────────────────────────────────
