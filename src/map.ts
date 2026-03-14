@@ -42,43 +42,43 @@ const FOOD_CLASSES: Record<FoodAmenity, string> = {
   restaurant: 'marker-food-restaurant',
 }
 
-/** Animates a polyline drawing itself using SVG stroke-dashoffset. */
-function animatePolyline(line: L.Polyline): void {
-  line.once('add', () => {
-    // Access the underlying SVG path Leaflet creates
-    const el = (line as unknown as { _path?: SVGPathElement })._path
-    if (!el || typeof el.getTotalLength !== 'function') return
+/**
+ * Draws a single tracer polyline over the full route coords, animating it
+ * from start to end using stroke-dashoffset, then removes it from the map.
+ * Call this once after adding the real route layer.
+ */
+export function animateSingleRoute(coords: import('./geo.ts').LatLon[], map: L.Map): void {
+  const tracer = L.polyline(coords as L.LatLngExpression[], {
+    color: '#f0c040',
+    weight: 4,
+    opacity: 0.9,
+  })
+  tracer.once('add', () => {
+    const el = (tracer as unknown as { _path?: SVGPathElement })._path
+    if (!el || typeof el.getTotalLength !== 'function') {
+      map.removeLayer(tracer)
+      return
+    }
     const len = el.getTotalLength()
     el.style.strokeDasharray = String(len)
     el.style.strokeDashoffset = String(len)
     el.classList.add('route-animate')
-    // Remove dasharray/dashoffset after animation so Leaflet can redraw
-    // the path freely on zoom without gaps caused by stale lengths.
-    el.addEventListener(
-      'animationend',
-      () => {
-        el.style.strokeDasharray = ''
-        el.style.strokeDashoffset = ''
-        el.classList.remove('route-animate')
-      },
-      { once: true },
-    )
+    el.addEventListener('animationend', () => map.removeLayer(tracer), { once: true })
   })
+  tracer.addTo(map)
 }
 
 export function buildRangeLayer(
   segments: import('./range.ts').RouteSegment[],
   terminator: import('./range.ts').TerminatorLine | null,
 ): L.FeatureGroup {
-  const layers: L.Layer[] = segments.map((seg) => {
-    const line = L.polyline(seg.coords as L.LatLngExpression[], {
+  const layers: L.Layer[] = segments.map((seg) =>
+    L.polyline(seg.coords as L.LatLngExpression[], {
       color: seg.color,
       weight: 4,
       opacity: 0.9,
-    })
-    animatePolyline(line)
-    return line
-  })
+    }),
+  )
   if (terminator) {
     layers.push(
       L.polyline(terminator.ends as L.LatLngExpression[], {
