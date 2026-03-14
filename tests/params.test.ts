@@ -206,3 +206,91 @@ describe('buildUrlSearch', () => {
     expect(parseUrlParams(qs).indieOnly).toBe(false)
   })
 })
+
+describe('parseUrlParams — via waypoints', () => {
+  it('parses a single via param', () => {
+    expect(parseUrlParams('?via=Oxford').vias).toEqual(['Oxford'])
+  })
+
+  it('parses multiple via params in order', () => {
+    expect(parseUrlParams('?via=Oxford&via=Birmingham').vias).toEqual(['Oxford', 'Birmingham'])
+  })
+
+  it('omits vias when none present', () => {
+    expect(parseUrlParams('').vias).toBeUndefined()
+  })
+
+  it('sanitises and drops invalid via values', () => {
+    const r = parseUrlParams('?via=Oxford&via=<script>')
+    expect(r.vias).toEqual(['Oxford'])
+  })
+
+  it('returns undefined vias when all via values are invalid', () => {
+    expect(parseUrlParams('?via=<script>').vias).toBeUndefined()
+  })
+
+  it('caps vias at 6 (max 8 total waypoints: from + 6 via + to)', () => {
+    const many = Array.from({ length: 8 }, (_, i) => `via=City${i}`).join('&')
+    const r = parseUrlParams(`?${many}`)
+    expect(r.vias?.length).toBe(6)
+  })
+})
+
+describe('parseUrlParams — per-leg charge percents', () => {
+  it('parses indexed charge params', () => {
+    const r = parseUrlParams('?charge_0=80&charge_1=50')
+    expect(r.chargePercents).toEqual([80, 50])
+  })
+
+  it('treats legacy charge= as charge_0', () => {
+    const r = parseUrlParams('?charge=75')
+    expect(r.chargePercents).toEqual([75])
+  })
+
+  it('omits chargePercents when none present', () => {
+    expect(parseUrlParams('').chargePercents).toBeUndefined()
+  })
+
+  it('clamps each value to 10–100', () => {
+    const r = parseUrlParams('?charge_0=5&charge_1=999')
+    expect(r.chargePercents).toEqual([10, 100])
+  })
+
+  it('skips non-numeric charge values', () => {
+    const r = parseUrlParams('?charge_0=80&charge_1=abc&charge_2=60')
+    expect(r.chargePercents).toEqual([80, 60])
+  })
+})
+
+describe('buildUrlSearch — vias and chargePercents', () => {
+  it('round-trips vias', () => {
+    const qs = buildUrlSearch('London', 'Edinburgh', 5, 150, undefined, undefined, undefined, [
+      'Oxford',
+      'Birmingham',
+    ])
+    const r = parseUrlParams(qs)
+    expect(r.vias).toEqual(['Oxford', 'Birmingham'])
+  })
+
+  it('round-trips per-leg charge percents', () => {
+    const qs = buildUrlSearch(
+      'London',
+      'Edinburgh',
+      5,
+      150,
+      'mg-4-ev-lr-2023',
+      undefined,
+      undefined,
+      ['Oxford'],
+      [80, 60],
+    )
+    const r = parseUrlParams(qs)
+    expect(r.chargePercents).toEqual([80, 60])
+  })
+
+  it('omits vias and chargePercents when not provided', () => {
+    const qs = buildUrlSearch('London', 'Edinburgh', 5, 150)
+    expect(qs).not.toContain('via=')
+    expect(qs).not.toContain('charge_')
+  })
+})
