@@ -314,17 +314,9 @@ input[type="range"]::-webkit-slider-thumb {
   to   { transform: translateY(0) scale(1); opacity: 1; }
 }
 
-/* Route draw-on animation — applied to Leaflet SVG paths */
-.route-animate {
-  animation: routeDraw 0.8s ease-out forwards;
-}
-@keyframes routeDraw {
-  to { stroke-dashoffset: 0; }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .marker-charger { animation: none; }
-  .route-animate  { animation: none; stroke-dashoffset: 0 !important; }
   .plan-step.active .step-icon::before { animation: none; }
   .dot.active { animation: none; }
 }
