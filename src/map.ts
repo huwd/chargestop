@@ -52,6 +52,17 @@ function animatePolyline(line: L.Polyline): void {
     el.style.strokeDasharray = String(len)
     el.style.strokeDashoffset = String(len)
     el.classList.add('route-animate')
+    // Remove dasharray/dashoffset after animation so Leaflet can redraw
+    // the path freely on zoom without gaps caused by stale lengths.
+    el.addEventListener(
+      'animationend',
+      () => {
+        el.style.strokeDasharray = ''
+        el.style.strokeDashoffset = ''
+        el.classList.remove('route-animate')
+      },
+      { once: true },
+    )
   })
 }
 
