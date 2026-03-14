@@ -19,14 +19,13 @@
   </div>
 
   <div id="controls">
-    <div id="inputs-row">
-      <div class="field">
-        <label for="from-input">From</label>
-        <input type="text" id="from-input" placeholder="e.g. London">
+    <div id="waypoints-section">
+      <div id="waypoints-list">
+        <!-- dynamically rendered by main.ts -->
       </div>
-      <div class="field">
-        <label for="to-input">To</label>
-        <input type="text" id="to-input" placeholder="e.g. Edinburgh">
+      <div id="waypoints-actions">
+        <button id="add-stop-btn" class="wp-action-btn">+ Add stop</button>
+        <button id="reverse-btn" class="wp-action-btn">⇅ Reverse</button>
       </div>
     </div>
 
@@ -49,10 +48,6 @@
           <input type="checkbox" id="indie-toggle" checked>
           Indie only
         </label>
-      </div>
-      <div class="slider-row" id="charge-row">
-        <label for="charge-slider">Starting charge: <span id="charge-val">100</span>%</label>
-        <input type="range" id="charge-slider" min="10" max="100" value="100" step="5">
       </div>
     </div>
 
