@@ -5,6 +5,7 @@ import { formatCuisine, isIndieFood } from './filters.ts'
 import { haversineM, type LatLon } from './geo.ts'
 import { vehiclesByMake } from './data/vehicles.ts'
 import { waypointLabels, type WaypointList } from './waypoints.ts'
+import { buildGoogleMapsUrl, buildAppleMapsUrl } from './share.ts'
 
 export function populateVehiclePicker(selectEl: HTMLSelectElement): void {
   const makes = vehiclesByMake()
@@ -254,6 +255,64 @@ export function renderWaypointList(
       container.appendChild(chargeRow)
     }
   })
+}
+
+// ─── Share bar ───────────────────────────────────────────────────────────────
+
+/**
+ * Populates the share bar with copy-link, optional native share, Google Maps,
+ * and Apple Maps buttons. All browser-API calls (clipboard, share, open) are
+ * passed in as callbacks so this remains unit-testable.
+ */
+export function renderShareBar(
+  container: HTMLElement,
+  places: string[],
+  url: string,
+  title: string,
+  isMultiLeg: boolean,
+  callbacks: {
+    onCopy: (url: string, btn: HTMLButtonElement) => void
+    onShare?: (title: string, url: string) => void
+    onAppleToast?: () => void
+  },
+): void {
+  container.innerHTML = ''
+  container.removeAttribute('hidden')
+
+  const copyBtn = document.createElement('button')
+  copyBtn.className = 'share-btn'
+  copyBtn.textContent = '🔗 Copy link'
+  copyBtn.addEventListener('click', () => callbacks.onCopy(url, copyBtn))
+  container.appendChild(copyBtn)
+
+  if (callbacks.onShare) {
+    const shareBtn = document.createElement('button')
+    shareBtn.className = 'share-btn'
+    shareBtn.textContent = '↗ Share'
+    shareBtn.addEventListener('click', () => callbacks.onShare!(title, url))
+    container.appendChild(shareBtn)
+  }
+
+  const from = places[0] ?? ''
+  const to = places[places.length - 1] ?? ''
+  const vias = places.slice(1, -1)
+
+  const gBtn = document.createElement('button')
+  gBtn.className = 'share-btn'
+  gBtn.textContent = '↗ Google Maps'
+  gBtn.addEventListener('click', () => {
+    window.open(buildGoogleMapsUrl(from, to, vias), '_blank', 'noopener')
+  })
+  container.appendChild(gBtn)
+
+  const aBtn = document.createElement('button')
+  aBtn.className = 'share-btn'
+  aBtn.textContent = '↗ Apple Maps'
+  aBtn.addEventListener('click', () => {
+    if (isMultiLeg && callbacks.onAppleToast) callbacks.onAppleToast()
+    window.open(buildAppleMapsUrl(from, to), '_blank', 'noopener')
+  })
+  container.appendChild(aBtn)
 }
 
 // ─── Mobile drawer ───────────────────────────────────────────────────────────
