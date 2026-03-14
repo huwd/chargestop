@@ -1,8 +1,17 @@
-/** Overpass API client with multi-endpoint failover. */
+/** Overpass API client with multi-endpoint failover and localStorage caching. */
 
 import type { BBox } from './geo.ts'
 import type { OsmElement } from './filters.ts'
 import type { ChargePortType } from './data/vehicles.ts'
+import { getCached, setCached } from './cache.ts'
+
+const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
+
+export interface OverpassOptions {
+  store?: Storage
+  /** Called with fresh data after a stale-while-revalidate cache hit. */
+  onRefresh?: (data: OverpassResponse) => void
+}
 
 export const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
@@ -14,10 +23,7 @@ export interface OverpassResponse {
   elements: OsmElement[]
 }
 
-export async function overpass(
-  query: string,
-  endpoints: string[] = OVERPASS_ENDPOINTS,
-): Promise<OverpassResponse> {
+async function fetchOverpass(query: string, endpoints: string[]): Promise<OverpassResponse> {
   let lastErr: Error = new Error('No endpoints configured')
   for (const endpoint of endpoints) {
     try {
@@ -38,6 +44,37 @@ export async function overpass(
     }
   }
   throw new Error(`All Overpass endpoints failed. Last: ${lastErr.message}`)
+}
+
+export async function overpass(
+  query: string,
+  endpoints: string[] = OVERPASS_ENDPOINTS,
+  options: OverpassOptions = {},
+): Promise<OverpassResponse> {
+  const { store, onRefresh } = options
+  const effectiveStore = store ?? (typeof localStorage !== 'undefined' ? localStorage : null)
+
+  if (effectiveStore) {
+    const cached = getCached<OverpassResponse>(query, CACHE_TTL_MS, effectiveStore)
+    if (cached) {
+      // Stale-while-revalidate: return cache immediately, refresh in background
+      if (onRefresh) {
+        void fetchOverpass(query, endpoints)
+          .then((fresh) => {
+            if (effectiveStore) setCached(query, fresh, effectiveStore)
+            onRefresh(fresh)
+          })
+          .catch(() => {
+            /* background refresh failure is silent */
+          })
+      }
+      return cached
+    }
+  }
+
+  const data = await fetchOverpass(query, endpoints)
+  if (effectiveStore) setCached(query, data, effectiveStore)
+  return data
 }
 
 const SOCKET_TAGS: Record<ChargePortType, string[]> = {

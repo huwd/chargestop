@@ -1,6 +1,25 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { overpass, buildChargerQuery, buildFoodQuery } from '../src/overpass.ts'
+import { setCached } from '../src/cache.ts'
 import type { BBox } from '../src/geo.ts'
+
+function makeMockStorage(): Storage {
+  const store = new Map<string, string>()
+  return {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      store.set(k, v)
+    },
+    removeItem: (k: string) => {
+      store.delete(k)
+    },
+    clear: () => store.clear(),
+    get length() {
+      return store.size
+    },
+    key: (i: number) => [...store.keys()][i] ?? null,
+  }
+}
 
 describe('buildChargerQuery', () => {
   it('includes the bounding box values', () => {
@@ -53,6 +72,65 @@ describe('buildFoodQuery', () => {
     expect(q).toContain('200')
     expect(q).toContain('"amenity"="cafe"')
     expect(q).toContain('"amenity"="pub"')
+  })
+})
+
+describe('overpass() — caching', () => {
+  let store: Storage
+
+  beforeEach(() => {
+    store = makeMockStorage()
+    vi.unstubAllGlobals()
+  })
+
+  it('returns cached data without calling fetch', async () => {
+    const cached = { elements: [{ id: 99, lat: 51.5, lon: -0.1, tags: {} }] }
+    setCached('my-query', cached, store)
+    const mockFetch = vi.fn()
+    vi.stubGlobal('fetch', mockFetch)
+
+    const result = await overpass('my-query', ['https://example.com'], { store })
+    expect(result.elements[0].id).toBe(99)
+    expect(mockFetch).not.toHaveBeenCalled()
+  })
+
+  it('calls onRefresh with fresh data after a cache hit', async () => {
+    const cached = { elements: [] }
+    const fresh = { elements: [{ id: 42, lat: 51, lon: 0, tags: {} }] }
+    setCached('my-query', cached, store)
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => JSON.stringify(fresh),
+      }),
+    )
+
+    const refreshed: { elements: { id: number }[] }[] = []
+    await overpass('my-query', ['https://example.com'], {
+      store,
+      onRefresh: (d) => refreshed.push(d as { elements: { id: number }[] }),
+    })
+
+    // onRefresh is async background — flush microtasks
+    await new Promise((r) => setTimeout(r, 10))
+    expect(refreshed).toHaveLength(1)
+    expect(refreshed[0].elements[0].id).toBe(42)
+  })
+
+  it('fetches and caches when no cache entry exists', async () => {
+    const data = { elements: [{ id: 7, lat: 52, lon: 1, tags: {} }] }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, text: async () => JSON.stringify(data) }),
+    )
+
+    const result = await overpass('cold-query', ['https://example.com'], { store })
+    expect(result.elements[0].id).toBe(7)
+    // Should now be in cache
+    const { getCached } = await import('../src/cache.ts')
+    expect(getCached('cold-query', 3600_000, store)).toEqual(data)
   })
 })
 
