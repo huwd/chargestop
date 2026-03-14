@@ -206,6 +206,18 @@ input[type="range"]::-webkit-slider-thumb {
 .tag.ccs { background: #1e2d3d; color: var(--blue); }
 .tag.chademo { background: #2a1e10; color: #f09040; }
 .tag.tesla { background: #2a1010; color: #e05c5c; }
+.tag.chain { background: #1e1e1e; color: var(--muted); }
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-top: 4px;
+  cursor: pointer;
+}
+.toggle-row input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
 
 .food-list { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); display: none; }
 .food-list.open { display: block; }

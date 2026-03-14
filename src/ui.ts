@@ -1,7 +1,7 @@
 /** Sidebar, status bar, and mobile drawer. */
 
 import type { OsmElement, SocketType } from './filters.ts'
-import { formatCuisine } from './filters.ts'
+import { formatCuisine, isIndieFood } from './filters.ts'
 import { haversineM, type LatLon } from './geo.ts'
 import { vehiclesByMake } from './data/vehicles.ts'
 
@@ -75,9 +75,13 @@ export function renderFoodList(
   foods: OsmElement[],
   chargerCoord: LatLon,
   foodRadiusM: number,
+  indieOnly: boolean,
 ): string {
   if (foods.length === 0) {
-    return `<div class="food-none">No indie places found within ${foodRadiusM}m — try increasing the radius</div>`
+    const msg = indieOnly
+      ? `No indie places found within ${foodRadiusM}m — try increasing the radius`
+      : `No food found within ${foodRadiusM}m — try increasing the radius`
+    return `<div class="food-none">${msg}</div>`
   }
   return foods
     .map((f) => {
@@ -87,10 +91,12 @@ export function renderFoodList(
       const dist = Math.round(haversineM(chargerCoord, [f.lat, f.lon]))
       const emoji = FOOD_EMOJIS[amenity] ?? '🍴'
       const detail = [amenity, cuisine].filter(Boolean).join(' · ')
+      const chainBadge =
+        !indieOnly && !isIndieFood(f) ? ' <span class="tag chain">chain</span>' : ''
       return `<div class="food-item">
         <div class="food-icon">${emoji}</div>
         <div class="food-info">
-          <div class="food-name">${name}</div>
+          <div class="food-name">${name}${chainBadge}</div>
           <div class="food-detail">${detail}</div>
         </div>
         <div class="dist-badge">${dist}m</div>
