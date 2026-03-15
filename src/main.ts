@@ -213,7 +213,7 @@ function attachFoodLoader(
       const fm = makeFoodMarker(f.lat, f.lon, f.tags.amenity ?? '')
       const cuisine = f.tags.cuisine ? ` · ${f.tags.cuisine}` : ''
       const indieNote = indieOnly
-        ? '<br><i style="color:#6b7280;font-size:0.85em">✓ No brand tag — likely indie</i>'
+        ? '<br><i style="color:#8b93a4;font-size:0.85em">✓ No brand tag — likely indie</i>'
         : ''
       fm.bindPopup(
         `<b style="color:#5ecf8a">${f.tags.name ?? 'Unnamed'}</b><br>` +
@@ -543,7 +543,7 @@ async function runPlan(): Promise<void> {
           marker.bindPopup(
             `<b>${name}</b><br>${network ? network + '<br>' : ''}` +
               `${sockets.join(' · ') || 'AC'}<br>` +
-              `<i style="color:#6b7280;font-size:0.85em">Click sidebar card to find food</i>`,
+              `<i style="color:#8b93a4;font-size:0.85em">Click sidebar card to find food</i>`,
           )
           setTimeout(() => {
             marker.addTo(map)
