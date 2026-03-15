@@ -32,6 +32,8 @@ import {
   computeTerminator,
   multiLegColoredSegments,
   computeMultiLegTerminator,
+  planChargingStops,
+  type ChargingPlan,
 } from './range.ts'
 import {
   makeWaypointList,
@@ -405,24 +407,62 @@ async function runPlan(): Promise<void> {
         nearbyChargers = nearbyChargers.filter((c) => matchesVehiclePort(c, vehicle.chargePortType))
       }
       const fastOnly = nearbyChargers.filter((c) => isFastCharger(c.tags))
-      const displayChargers = fastOnly.length > 0 ? fastOnly : nearbyChargers
+      const candidateChargers = fastOnly.length > 0 ? fastOnly : nearbyChargers
 
-      if (displayChargers.length === 0) {
+      if (candidateChargers.length === 0) {
         status(`No chargers found within ${detourKm}km — try increasing detour`, 'err')
         resultsDiv.innerHTML = `<div class="empty-state"><div class="big">😞</div><div>No chargers found.<br>Try a wider detour.</div></div>`
         return
       }
 
-      const label =
-        fastOnly.length > 0
-          ? `${displayChargers.length} fast charger${displayChargers.length !== 1 ? 's' : ''} found`
-          : `${displayChargers.length} charger${displayChargers.length !== 1 ? 's' : ''} (slow) found`
+      // When a vehicle is selected, compute the minimum required stops
+      let plan: ChargingPlan | null = null
+      let planError: string | null = null
+      if (vehicle) {
+        const cumDist = cumulativeDistancesKm(routeCoords)
+        try {
+          plan = planChargingStops(
+            routeCoords,
+            cumDist,
+            candidateChargers,
+            vehicle,
+            chargePercents[0],
+          )
+        } catch (e) {
+          planError = e instanceof Error ? e.message : String(e)
+        }
+      }
+
+      // Determine which chargers to display
+      const displayChargers = plan !== null ? plan.stops.map((s) => s.charger) : candidateChargers
+
+      const routeTotalKm = cumulativeDistancesKm(routeCoords).at(-1)!
+
+      const label = ((): string => {
+        if (plan !== null) {
+          const n = plan.stops.length
+          return n === 0
+            ? `No stops needed · ${routeTotalKm.toFixed(0)}km route`
+            : `${n} stop${n !== 1 ? 's' : ''} needed · ${routeTotalKm.toFixed(0)}km route · starting at ${chargePercents[0]}%`
+        }
+        return fastOnly.length > 0
+          ? `${candidateChargers.length} fast charger${candidateChargers.length !== 1 ? 's' : ''} found`
+          : `${candidateChargers.length} charger${candidateChargers.length !== 1 ? 's' : ''} (slow) found`
+      })()
 
       const vehicleLabel = vehicle
         ? ` · ${vehicle.make} ${vehicle.model} · ${effectiveRangeKm(vehicle, chargePercents[0]).toFixed(0)}km range`
         : ''
       const cacheLabel = cached ? ' ⚡' : ''
-      status(label + ' — click any to find food' + cacheLabel, 'ok')
+
+      if (planError) {
+        status(`Route unreachable: ${planError}`, 'err')
+      } else {
+        status(
+          label + (plan === null ? ' — click any to find food' : '') + cacheLabel,
+          plan !== null ? 'ok' : 'ok',
+        )
+      }
       step('done')
 
       // Share bar — build from the current filled-in place names
@@ -470,6 +510,11 @@ async function runPlan(): Promise<void> {
         resultsDiv.innerHTML = ''
       }
 
+      if (planError) {
+        resultsDiv.innerHTML = `<div class="empty-state"><div class="big">⚠️</div><div>${planError}<br><small>Try adding a waypoint near a charger, or selecting a different vehicle.</small></div></div>`
+        return
+      }
+
       resultsDiv.innerHTML = `<div class="section-label" style="margin-bottom:10px">${label}${vehicleLabel} · ${detourKm}km detour · food within ${foodRadiusM}m</div>`
 
       displayChargers.forEach((c, i) => {
@@ -477,7 +522,8 @@ async function runPlan(): Promise<void> {
         const network = c.tags.network ?? c.tags.operator ?? ''
         const sockets = getChargerSockets(c.tags)
 
-        const card = buildChargerCard(c, sockets)
+        const stopInfo = plan?.stops.find((s) => s.charger.id === c.id)
+        const card = buildChargerCard(c, sockets, stopInfo)
         const marker = makeChargerMarker(c.lat, c.lon)
         marker.bindPopup(
           `<b>${name}</b><br>${network ? network + '<br>' : ''}` +
