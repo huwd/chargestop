@@ -276,6 +276,25 @@ input[type="range"]::-webkit-slider-thumb {
 
 .charger-card:hover { border-color: var(--accent); background: #1a1b20; }
 .charger-card.active { border-color: var(--green); background: #111814; }
+.charger-card.charger-optional { opacity: 0.55; border-left-color: var(--border); }
+.charger-card.charger-optional:hover { opacity: 0.85; }
+
+.show-all-btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, color 0.15s;
+}
+.show-all-btn:hover { border-color: var(--accent); color: var(--text); }
+.show-all-btn.active { border-color: var(--accent); color: var(--accent); }
 
 .charger-name { font-size: 0.82rem; font-weight: 500; color: var(--text); margin-bottom: 3px; }
 
