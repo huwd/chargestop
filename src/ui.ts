@@ -343,18 +343,23 @@ export function initDrawer(
   header: HTMLElement,
   isMobile: () => boolean,
 ): void {
+  function setLabel(label: string): void {
+    const span = toggleBtn.querySelector('.visually-hidden')
+    if (span) span.textContent = label
+  }
+
   function open(): void {
     sidebar.classList.add('open')
     toggleBtn.classList.add('open')
     toggleBtn.setAttribute('aria-expanded', 'true')
-    toggleBtn.setAttribute('aria-label', 'Close menu')
+    setLabel('Close menu')
   }
 
   function close(): void {
     sidebar.classList.remove('open')
     toggleBtn.classList.remove('open')
     toggleBtn.setAttribute('aria-expanded', 'false')
-    toggleBtn.setAttribute('aria-label', 'Open menu')
+    setLabel('Open menu')
   }
 
   function toggle(): void {
