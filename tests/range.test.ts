@@ -8,7 +8,10 @@ import {
   computeTerminator,
   multiLegColoredSegments,
   computeMultiLegTerminator,
+  routeProjectionKm,
+  planChargingStops,
 } from '../src/range.ts'
+import type { OsmElement } from '../src/filters.ts'
 import type { LatLon } from '../src/geo.ts'
 import type { Vehicle } from '../src/data/vehicles.ts'
 
@@ -245,5 +248,143 @@ describe('computeMultiLegTerminator', () => {
     // Terminator should be on leg 1 (lat > 52)
     expect(t!.point[0]).toBeGreaterThan(52.0)
     expect(t!.point[0]).toBeLessThan(55.0)
+  })
+})
+
+// ─── routeProjectionKm ────────────────────────────────────────────────────────
+
+// North-south route: 4 points, each ~111km apart
+// 51→52→53→54 °N along the prime meridian
+describe('routeProjectionKm', () => {
+  it('projects a point exactly on the route to its cumulative distance', () => {
+    const cum = cumulativeDistancesKm(ROUTE)
+    // ROUTE[1] = [52, 0] is exactly on the route
+    const d = routeProjectionKm(ROUTE[1], ROUTE, cum)
+    expect(d).toBeCloseTo(cum[1], 0)
+  })
+
+  it('projects a point beside the first segment to somewhere in that segment', () => {
+    const cum = cumulativeDistancesKm(ROUTE)
+    // Point beside midpoint of first segment
+    const midLat = 51.5
+    const pt: LatLon = [midLat, 0.1] // slightly east of route
+    const d = routeProjectionKm(pt, ROUTE, cum)
+    // Should project to ~half of first segment distance
+    expect(d).toBeGreaterThan(0)
+    expect(d).toBeLessThan(cum[1])
+  })
+
+  it('projects a point past the end of the route to the route total length', () => {
+    const cum = cumulativeDistancesKm(ROUTE)
+    const pt: LatLon = [60.0, 0.0] // far north of route end
+    const d = routeProjectionKm(pt, ROUTE, cum)
+    expect(d).toBeCloseTo(cum[cum.length - 1], 0)
+  })
+
+  it('projects a point before the start to 0', () => {
+    const cum = cumulativeDistancesKm(ROUTE)
+    const pt: LatLon = [50.0, 0.0] // south of route start
+    const d = routeProjectionKm(pt, ROUTE, cum)
+    expect(d).toBeCloseTo(0, 0)
+  })
+})
+
+// ─── planChargingStops ────────────────────────────────────────────────────────
+
+function makeCharger(id: number, lat: number, lon: number): OsmElement {
+  return {
+    id,
+    lat,
+    lon,
+    tags: {
+      amenity: 'charging_station',
+      'socket:type2_combo': '2',
+    },
+  }
+}
+
+// Simple 4-point N-S route ~333km total
+// [51,0] → [52,0] → [53,0] → [54,0]
+// CAR has 400km range, chargePercents default to 80% target
+
+describe('planChargingStops', () => {
+  it('returns empty stops when route is reachable without charging', () => {
+    const cum = cumulativeDistancesKm(ROUTE)
+    // 100% charge, 400km range, route ~333km — no stop needed
+    const plan = planChargingStops(ROUTE, cum, [], CAR, 100)
+    expect(plan.stops).toHaveLength(0)
+  })
+
+  it('picks the single required stop when route just exceeds range', () => {
+    // Car range 200km at 100% → can't reach 333km destination
+    // Charger at ~111km (just before range limit)
+    const shortCar: Vehicle = { ...CAR, wltpRangeKm: 200 }
+    const chargers = [makeCharger(1, 52.0, 0.0)] // ~111km along route
+    const cum = cumulativeDistancesKm(ROUTE)
+    const plan = planChargingStops(ROUTE, cum, chargers, shortCar, 100)
+    expect(plan.stops).toHaveLength(1)
+    expect(plan.stops[0].charger.id).toBe(1)
+  })
+
+  it('picks the furthest charger when multiple are in range (greedy)', () => {
+    // Car range 200km; chargers at ~111km and ~180km — should pick ~180km
+    const shortCar: Vehicle = { ...CAR, wltpRangeKm: 200 }
+    const nearCharger = makeCharger(1, 52.0, 0.0) // ~111km
+    const farCharger = makeCharger(2, 52.6, 0.0) // ~180km (further along)
+    const cum = cumulativeDistancesKm(ROUTE)
+    const plan = planChargingStops(ROUTE, cum, [nearCharger, farCharger], shortCar, 100)
+    expect(plan.stops[0].charger.id).toBe(2)
+  })
+
+  it('returns two stops when route requires two charging sessions', () => {
+    // Long route, short-range car: needs 2 stops
+    const longRoute: LatLon[] = [
+      [51.0, 0.0],
+      [52.0, 0.0],
+      [53.0, 0.0],
+      [54.0, 0.0],
+      [55.0, 0.0],
+    ] // ~444km
+    const shortCar: Vehicle = { ...CAR, wltpRangeKm: 200 }
+    // One charger near 111km, one near 330km
+    const chargers = [makeCharger(1, 52.0, 0.0), makeCharger(2, 54.0, 0.0)]
+    const cum = cumulativeDistancesKm(longRoute)
+    const plan = planChargingStops(longRoute, cum, chargers, shortCar, 100)
+    expect(plan.stops).toHaveLength(2)
+    expect(plan.stops[0].charger.id).toBe(1)
+    expect(plan.stops[1].charger.id).toBe(2)
+  })
+
+  it('throws when no charger can bridge the gap', () => {
+    const shortCar: Vehicle = { ...CAR, wltpRangeKm: 50 } // range too short
+    const cum = cumulativeDistancesKm(ROUTE)
+    expect(() => planChargingStops(ROUTE, cum, [], shortCar, 100)).toThrow()
+  })
+
+  it('respects minChargePercent as a buffer', () => {
+    // Car range 400km, but with 10% min buffer, usable range = 360km
+    // Route ~333km — should still be reachable
+    const cum = cumulativeDistancesKm(ROUTE)
+    const plan = planChargingStops(ROUTE, cum, [], CAR, 100, 10)
+    expect(plan.stops).toHaveLength(0)
+  })
+
+  it('returns correct arrivalSocPercent for the stop', () => {
+    const shortCar: Vehicle = { ...CAR, wltpRangeKm: 200 }
+    const charger = makeCharger(1, 52.0, 0.0) // ~111km along route
+    const cum = cumulativeDistancesKm(ROUTE)
+    const plan = planChargingStops(ROUTE, cum, [charger], shortCar, 100)
+    const stop = plan.stops[0]
+    // Arrival SoC: started at 100%, travelled ~111km on 200km range → ~44.5% remaining
+    expect(stop.arrivalSocPercent).toBeGreaterThan(40)
+    expect(stop.arrivalSocPercent).toBeLessThan(60)
+  })
+
+  it('returns departureSocPercent equal to targetChargePercent', () => {
+    const shortCar: Vehicle = { ...CAR, wltpRangeKm: 200 }
+    const charger = makeCharger(1, 52.0, 0.0)
+    const cum = cumulativeDistancesKm(ROUTE)
+    const plan = planChargingStops(ROUTE, cum, [charger], shortCar, 100, 10, 80)
+    expect(plan.stops[0].departureSocPercent).toBe(80)
   })
 })
