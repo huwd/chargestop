@@ -316,40 +316,42 @@ describe('planChargingStops', () => {
   })
 
   it('picks the single required stop when route just exceeds range', () => {
-    // Car range 200km at 100% → can't reach 333km destination
-    // Charger at ~111km (just before range limit)
+    // Route ~333km; car 200km (min=0, target=100); charger at ~189km
+    // From 0: picks charger at ~189km (< 200km range)
+    // From 189km: 189+200=389 > 333 → destination reachable
     const shortCar: Vehicle = { ...CAR, wltpRangeKm: 200 }
-    const chargers = [makeCharger(1, 52.0, 0.0)] // ~111km along route
+    const chargers = [makeCharger(1, 52.7, 0.0)] // ~189km along ROUTE
     const cum = cumulativeDistancesKm(ROUTE)
-    const plan = planChargingStops(ROUTE, cum, chargers, shortCar, 100)
+    const plan = planChargingStops(ROUTE, cum, chargers, shortCar, 100, 0, 100)
     expect(plan.stops).toHaveLength(1)
     expect(plan.stops[0].charger.id).toBe(1)
   })
 
   it('picks the furthest charger when multiple are in range (greedy)', () => {
-    // Car range 200km; chargers at ~111km and ~180km — should pick ~180km
+    // Car 200km (min=0, target=100); chargers at ~111km and ~189km — picks ~189km
+    // From 189km: 189+200=389 > 333 → destination reachable in one stop
     const shortCar: Vehicle = { ...CAR, wltpRangeKm: 200 }
     const nearCharger = makeCharger(1, 52.0, 0.0) // ~111km
-    const farCharger = makeCharger(2, 52.6, 0.0) // ~180km (further along)
+    const farCharger = makeCharger(2, 52.7, 0.0) // ~189km
     const cum = cumulativeDistancesKm(ROUTE)
-    const plan = planChargingStops(ROUTE, cum, [nearCharger, farCharger], shortCar, 100)
+    const plan = planChargingStops(ROUTE, cum, [nearCharger, farCharger], shortCar, 100, 0, 100)
     expect(plan.stops[0].charger.id).toBe(2)
   })
 
   it('returns two stops when route requires two charging sessions', () => {
-    // Long route, short-range car: needs 2 stops
-    const longRoute: LatLon[] = [
+    // 3-segment route ~333km; car range 180km; min=0, target=100%
+    // Stop 1 at ~111km: reachable (111<180). From there, stop 2 at ~222km: reachable (222-111=111<180).
+    // From 222km: 333-222=111 < 180 → destination reachable.
+    const threeSegRoute: LatLon[] = [
       [51.0, 0.0],
       [52.0, 0.0],
       [53.0, 0.0],
       [54.0, 0.0],
-      [55.0, 0.0],
-    ] // ~444km
-    const shortCar: Vehicle = { ...CAR, wltpRangeKm: 200 }
-    // One charger near 111km, one near 330km
-    const chargers = [makeCharger(1, 52.0, 0.0), makeCharger(2, 54.0, 0.0)]
-    const cum = cumulativeDistancesKm(longRoute)
-    const plan = planChargingStops(longRoute, cum, chargers, shortCar, 100)
+    ]
+    const shortCar: Vehicle = { ...CAR, wltpRangeKm: 180 }
+    const chargers = [makeCharger(1, 52.0, 0.0), makeCharger(2, 53.0, 0.0)]
+    const cum = cumulativeDistancesKm(threeSegRoute)
+    const plan = planChargingStops(threeSegRoute, cum, chargers, shortCar, 100, 0, 100)
     expect(plan.stops).toHaveLength(2)
     expect(plan.stops[0].charger.id).toBe(1)
     expect(plan.stops[1].charger.id).toBe(2)
@@ -370,10 +372,12 @@ describe('planChargingStops', () => {
   })
 
   it('returns correct arrivalSocPercent for the stop', () => {
+    // Two-segment route ~222km; charger at ~111km (midpoint)
+    const twoSegRoute: LatLon[] = [[51.0, 0.0], [52.0, 0.0], [53.0, 0.0]]
     const shortCar: Vehicle = { ...CAR, wltpRangeKm: 200 }
     const charger = makeCharger(1, 52.0, 0.0) // ~111km along route
-    const cum = cumulativeDistancesKm(ROUTE)
-    const plan = planChargingStops(ROUTE, cum, [charger], shortCar, 100)
+    const cum = cumulativeDistancesKm(twoSegRoute)
+    const plan = planChargingStops(twoSegRoute, cum, [charger], shortCar, 100)
     const stop = plan.stops[0]
     // Arrival SoC: started at 100%, travelled ~111km on 200km range → ~44.5% remaining
     expect(stop.arrivalSocPercent).toBeGreaterThan(40)
@@ -381,10 +385,13 @@ describe('planChargingStops', () => {
   })
 
   it('returns departureSocPercent equal to targetChargePercent', () => {
+    // Two-segment route ~222km; charger at ~111km; 200km car charges to 80%
+    // Usable from stop: 200*(80-10)/100 = 140km; 111+140=251 > 222 — reachable
+    const twoSegRoute: LatLon[] = [[51.0, 0.0], [52.0, 0.0], [53.0, 0.0]]
     const shortCar: Vehicle = { ...CAR, wltpRangeKm: 200 }
     const charger = makeCharger(1, 52.0, 0.0)
-    const cum = cumulativeDistancesKm(ROUTE)
-    const plan = planChargingStops(ROUTE, cum, [charger], shortCar, 100, 10, 80)
+    const cum = cumulativeDistancesKm(twoSegRoute)
+    const plan = planChargingStops(twoSegRoute, cum, [charger], shortCar, 100, 10, 80)
     expect(plan.stops[0].departureSocPercent).toBe(80)
   })
 })
