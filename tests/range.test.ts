@@ -373,7 +373,11 @@ describe('planChargingStops', () => {
 
   it('returns correct arrivalSocPercent for the stop', () => {
     // Two-segment route ~222km; charger at ~111km (midpoint)
-    const twoSegRoute: LatLon[] = [[51.0, 0.0], [52.0, 0.0], [53.0, 0.0]]
+    const twoSegRoute: LatLon[] = [
+      [51.0, 0.0],
+      [52.0, 0.0],
+      [53.0, 0.0],
+    ]
     const shortCar: Vehicle = { ...CAR, wltpRangeKm: 200 }
     const charger = makeCharger(1, 52.0, 0.0) // ~111km along route
     const cum = cumulativeDistancesKm(twoSegRoute)
@@ -387,7 +391,11 @@ describe('planChargingStops', () => {
   it('returns departureSocPercent equal to targetChargePercent', () => {
     // Two-segment route ~222km; charger at ~111km; 200km car charges to 80%
     // Usable from stop: 200*(80-10)/100 = 140km; 111+140=251 > 222 — reachable
-    const twoSegRoute: LatLon[] = [[51.0, 0.0], [52.0, 0.0], [53.0, 0.0]]
+    const twoSegRoute: LatLon[] = [
+      [51.0, 0.0],
+      [52.0, 0.0],
+      [53.0, 0.0],
+    ]
     const shortCar: Vehicle = { ...CAR, wltpRangeKm: 200 }
     const charger = makeCharger(1, 52.0, 0.0)
     const cum = cumulativeDistancesKm(twoSegRoute)
