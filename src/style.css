@@ -567,22 +567,18 @@ input[type="range"]::-webkit-slider-thumb {
   display: none;
   position: fixed;
   bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-  left: 50%;
-  transform: translateX(-50%);
+  right: 20px;
   z-index: 1100;
   background: var(--accent);
   color: #0e0f11;
   border: none;
-  border-radius: 24px;
-  padding: 12px 24px;
-  font-family: var(--font-ui);
-  font-size: 0.85rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  font-size: 1.3rem;
+  line-height: 1;
   cursor: pointer;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-  white-space: nowrap;
   transition: opacity 0.15s;
 }
 
@@ -653,6 +649,6 @@ input[type="range"]::-webkit-slider-thumb {
 
   .leaflet-bottom.leaflet-right { bottom: 80px !important; }
 
-  #drawer-toggle { display: flex; align-items: center; gap: 6px; }
-  #drawer-toggle.open { background: var(--border); color: var(--text); }
+  #drawer-toggle { display: flex; align-items: center; justify-content: center; }
+  #drawer-toggle.open { display: none; }
 }

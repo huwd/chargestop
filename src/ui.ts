@@ -346,13 +346,15 @@ export function initDrawer(
   function open(): void {
     sidebar.classList.add('open')
     toggleBtn.classList.add('open')
-    toggleBtn.textContent = '✕ Close'
+    toggleBtn.setAttribute('aria-expanded', 'true')
+    toggleBtn.setAttribute('aria-label', 'Close menu')
   }
 
   function close(): void {
     sidebar.classList.remove('open')
     toggleBtn.classList.remove('open')
-    toggleBtn.innerHTML = '⚡ ChargeStop'
+    toggleBtn.setAttribute('aria-expanded', 'false')
+    toggleBtn.setAttribute('aria-label', 'Open menu')
   }
 
   function toggle(): void {
