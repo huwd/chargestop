@@ -267,8 +267,7 @@ export function planChargingStops(
 
   while (true) {
     // Usable range from current position (keeping minChargePercent in reserve)
-    const usableRangeKm =
-      vehicle.wltpRangeKm * ((currentSoc - minChargePercent) / 100)
+    const usableRangeKm = vehicle.wltpRangeKm * ((currentSoc - minChargePercent) / 100)
 
     if (currentKm + usableRangeKm >= routeTotalKm) {
       // Destination is reachable — done
