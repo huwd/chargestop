@@ -2,6 +2,7 @@
 
 import { haversineM, bearingDeg, destinationPoint, type LatLon } from './geo.ts'
 import type { Vehicle } from './data/vehicles.ts'
+import type { OsmElement } from './filters.ts'
 
 /** Slice coords and cumDistKm for a single leg, returning leg-relative distances. */
 function legSlice(
@@ -180,4 +181,129 @@ export function computeTerminator(
     point,
     ends: [destinationPoint(point, perp, 0.4), destinationPoint(point, (perp + 180) % 360, 0.4)],
   }
+}
+
+// ─── Charging stop planner ────────────────────────────────────────────────────
+
+/**
+ * Returns the cumulative distance (km) along the route at the closest projected
+ * point to `pt`. Uses segment-by-segment projection with t clamped to [0,1].
+ */
+export function routeProjectionKm(pt: LatLon, coords: LatLon[], cumDistKm: number[]): number {
+  let bestDist = Infinity
+  let bestRouteKm = 0
+
+  for (let i = 1; i < coords.length; i++) {
+    const [ax, ay] = coords[i - 1]
+    const [bx, by] = coords[i]
+    const [px, py] = pt
+
+    const dx = bx - ax
+    const dy = by - ay
+    const lenSq = dx * dx + dy * dy
+
+    let t = 0
+    if (lenSq > 0) {
+      t = ((px - ax) * dx + (py - ay) * dy) / lenSq
+      t = Math.max(0, Math.min(1, t))
+    }
+
+    const cx = ax + t * dx
+    const cy = ay + t * dy
+    const d = Math.hypot(px - cx, py - cy)
+
+    if (d < bestDist) {
+      bestDist = d
+      bestRouteKm = cumDistKm[i - 1] + t * (cumDistKm[i] - cumDistKm[i - 1])
+    }
+  }
+
+  return bestRouteKm
+}
+
+export interface ChargingStop {
+  charger: OsmElement
+  /** SoC on arrival at this charger (%). */
+  arrivalSocPercent: number
+  /** SoC when leaving this charger (%). */
+  departureSocPercent: number
+  /** Cumulative route distance to this charger (km). */
+  distanceAlongRouteKm: number
+}
+
+export interface ChargingPlan {
+  stops: ChargingStop[]
+}
+
+/**
+ * Greedy minimum-stop charging planner.
+ *
+ * Chargers should already be filtered by proximity to the route and vehicle
+ * port compatibility. The algorithm finds the minimum number of stops needed
+ * to complete the route, always picking the furthest reachable charger.
+ *
+ * Throws if the route cannot be completed (no charger bridges a gap).
+ */
+export function planChargingStops(
+  routeCoords: LatLon[],
+  cumDistKm: number[],
+  chargers: OsmElement[],
+  vehicle: Vehicle,
+  startChargePercent: number,
+  minChargePercent = 10,
+  targetChargePercent = 80,
+): ChargingPlan {
+  const routeTotalKm = cumDistKm[cumDistKm.length - 1]
+
+  // Pre-compute each charger's position along the route
+  const chargerPositions = chargers.map((c) => ({
+    charger: c,
+    routeKm: routeProjectionKm([c.lat, c.lon], routeCoords, cumDistKm),
+  }))
+
+  const stops: ChargingStop[] = []
+  let currentKm = 0
+  let currentSoc = startChargePercent
+
+  while (true) {
+    // Usable range from current position (keeping minChargePercent in reserve)
+    const usableRangeKm =
+      vehicle.wltpRangeKm * ((currentSoc - minChargePercent) / 100)
+
+    if (currentKm + usableRangeKm >= routeTotalKm) {
+      // Destination is reachable — done
+      break
+    }
+
+    // Find the furthest charger reachable from currentKm within usableRange
+    let best: (typeof chargerPositions)[number] | null = null
+    for (const cp of chargerPositions) {
+      if (cp.routeKm <= currentKm) continue // behind us
+      if (cp.routeKm > currentKm + usableRangeKm) continue // out of range
+      if (best === null || cp.routeKm > best.routeKm) best = cp
+    }
+
+    if (!best) {
+      throw new Error(
+        `Route is unreachable: no charging stop available between ` +
+          `${currentKm.toFixed(0)}km and ${(currentKm + usableRangeKm).toFixed(0)}km`,
+      )
+    }
+
+    const distToStop = best.routeKm - currentKm
+    const socConsumed = (distToStop / vehicle.wltpRangeKm) * 100
+    const arrivalSoc = currentSoc - socConsumed
+
+    stops.push({
+      charger: best.charger,
+      arrivalSocPercent: Math.max(0, arrivalSoc),
+      departureSocPercent: targetChargePercent,
+      distanceAlongRouteKm: best.routeKm,
+    })
+
+    currentKm = best.routeKm
+    currentSoc = targetChargePercent
+  }
+
+  return { stops }
 }
