@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Plan a driving route and find EV fast chargers with indie cafés, pubs, and restaurants nearby. No chains.">
 <title>ChargeStop — EV + Indie Food Planner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,7 +12,10 @@
 </head>
 <body>
 
-<button id="drawer-toggle" aria-label="Open menu" aria-expanded="false">☰</button>
+<button id="drawer-toggle" aria-expanded="false">
+  <span aria-hidden="true">☰</span>
+  <span class="visually-hidden">Open menu</span>
+</button>
 
 <div id="sidebar">
   <div id="sidebar-header">
@@ -40,11 +44,11 @@
     <div id="sliders-row">
       <div class="slider-row">
         <label for="detour-slider">Detour: <span id="detour-val">5</span>km</label>
-        <input type="range" id="detour-slider" min="1" max="25" value="5" step="1">
+        <input type="range" id="detour-slider" min="1" max="25" value="5" step="1" aria-valuetext="5km">
       </div>
       <div class="slider-row">
         <label for="food-slider">Food within: <span id="food-val">150</span>m</label>
-        <input type="range" id="food-slider" min="50" max="600" value="150" step="50">
+        <input type="range" id="food-slider" min="50" max="600" value="150" step="50" aria-valuetext="150m">
       </div>
       <div class="slider-row">
         <label class="toggle-row">
@@ -57,7 +61,7 @@
     <button id="plan-btn">Plan Route</button>
   </div>
 
-  <div id="status-bar">
+  <div id="status-bar" aria-live="polite" aria-atomic="true">
     <div class="dot" id="status-dot"></div>
     <span id="status-msg">Enter a route and click Plan</span>
   </div>
@@ -84,7 +88,7 @@
   </div>
 </div>
 
-<div id="map"></div>
+<div id="map" role="application" aria-label="Route map"></div>
 
 <script type="module" src="/src/main.ts"></script>
 </body>

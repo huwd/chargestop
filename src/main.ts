@@ -550,6 +550,15 @@ async function runPlan(): Promise<void> {
             chargerMarkers.push(marker)
           }, i * 40)
 
+          card.setAttribute('tabindex', '0')
+          card.setAttribute('role', 'button')
+          card.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              card.click()
+            }
+          })
+
           attachFoodLoader(c, card, marker, foodRadiusM)
           listEl.appendChild(card)
         })
