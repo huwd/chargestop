@@ -515,29 +515,68 @@ async function runPlan(): Promise<void> {
         return
       }
 
-      resultsDiv.innerHTML = `<div class="section-label" style="margin-bottom:10px">${label}${vehicleLabel} · ${detourKm}km detour · food within ${foodRadiusM}m</div>`
+      // Required stop IDs for fast lookup
+      const requiredIds = new Set(plan?.stops.map((s) => s.charger.id) ?? [])
 
-      displayChargers.forEach((c, i) => {
-        const name = c.tags.name ?? c.tags.operator ?? 'Charging Station'
-        const network = c.tags.network ?? c.tags.operator ?? ''
-        const sockets = getChargerSockets(c.tags)
+      // Render the charger list; called again when the show-all toggle changes
+      let showAll = false
+      const renderList = (): void => {
+        chargerMarkers.forEach((m) => map.removeLayer(m))
+        chargerMarkers = []
 
-        const stopInfo = plan?.stops.find((s) => s.charger.id === c.id)
-        const card = buildChargerCard(c, sockets, stopInfo)
-        const marker = makeChargerMarker(c.lat, c.lon)
-        marker.bindPopup(
-          `<b>${name}</b><br>${network ? network + '<br>' : ''}` +
-            `${sockets.join(' · ') || 'AC'}<br>` +
-            `<i style="color:#6b7280;font-size:0.85em">Click sidebar card to find food</i>`,
-        )
-        setTimeout(() => {
-          marker.addTo(map)
-          chargerMarkers.push(marker)
-        }, i * 40)
+        const chargersToShow = showAll ? candidateChargers : displayChargers
+        const listEl = resultsDiv.querySelector<HTMLElement>('.charger-list')
+        if (!listEl) return
+        listEl.innerHTML = ''
 
-        attachFoodLoader(c, card, marker, foodRadiusM)
-        resultsDiv.appendChild(card)
+        chargersToShow.forEach((c, i) => {
+          const name = c.tags.name ?? c.tags.operator ?? 'Charging Station'
+          const network = c.tags.network ?? c.tags.operator ?? ''
+          const sockets = getChargerSockets(c.tags)
+          const isRequired = requiredIds.has(c.id)
+
+          const stopInfo = plan?.stops.find((s) => s.charger.id === c.id)
+          const card = buildChargerCard(c, sockets, stopInfo)
+          if (showAll && !isRequired) card.classList.add('charger-optional')
+
+          const marker = makeChargerMarker(c.lat, c.lon)
+          marker.bindPopup(
+            `<b>${name}</b><br>${network ? network + '<br>' : ''}` +
+              `${sockets.join(' · ') || 'AC'}<br>` +
+              `<i style="color:#6b7280;font-size:0.85em">Click sidebar card to find food</i>`,
+          )
+          setTimeout(() => {
+            marker.addTo(map)
+            chargerMarkers.push(marker)
+          }, i * 40)
+
+          attachFoodLoader(c, card, marker, foodRadiusM)
+          listEl.appendChild(card)
+        })
+      }
+
+      // Build the scaffold: summary label + optional toggle + charger list
+      const showAllToggle =
+        plan !== null && candidateChargers.length > displayChargers.length
+          ? `<button class="show-all-btn" id="show-all-btn">Show all ${candidateChargers.length} chargers</button>`
+          : ''
+
+      resultsDiv.innerHTML = `
+        <div class="section-label" style="margin-bottom:6px">${label}${vehicleLabel} · ${detourKm}km detour · food within ${foodRadiusM}m</div>
+        ${showAllToggle}
+        <div class="charger-list"></div>`
+
+      const toggleBtn = resultsDiv.querySelector<HTMLButtonElement>('#show-all-btn')
+      toggleBtn?.addEventListener('click', () => {
+        showAll = !showAll
+        toggleBtn.textContent = showAll
+          ? `Show required stops only`
+          : `Show all ${candidateChargers.length} chargers`
+        toggleBtn.classList.toggle('active', showAll)
+        renderList()
       })
+
+      renderList()
     }
 
     const chargerData = await overpass(chargerQuery, undefined, {
