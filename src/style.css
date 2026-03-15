@@ -599,7 +599,7 @@ input[type="range"]::-webkit-slider-thumb {
     border-top: 2px solid var(--accent);
     border-radius: 16px 16px 0 0;
     max-height: 85dvh;
-    transform: translateY(calc(100% - 72px));
+    transform: translateY(calc(100% - 88px));
     transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
     overflow: hidden;
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -607,18 +607,28 @@ input[type="range"]::-webkit-slider-thumb {
 
   #sidebar.open { transform: translateY(0); }
 
+  /* Drag handle — part of the tappable header strip */
   #sidebar::before {
     content: '';
     display: block;
-    width: 40px; height: 4px;
-    border-radius: 2px;
-    background: var(--border);
-    margin: 10px auto 0;
+    width: 48px; height: 5px;
+    border-radius: 3px;
+    background: var(--muted);
+    margin: 12px auto 0;
     flex-shrink: 0;
+    opacity: 0.5;
   }
 
-  #sidebar-header { padding: 10px 16px 14px; cursor: pointer; user-select: none; flex-shrink: 0; }
-  #sidebar-header h1 { font-size: 1.05rem; }
+  #sidebar-header {
+    padding: 10px 20px 16px;
+    cursor: pointer;
+    user-select: none;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  #sidebar-header h1 { font-size: 1.1rem; }
   #sidebar-header p  { display: none; }
 
   #controls { padding: 12px 16px; }
@@ -647,8 +657,7 @@ input[type="range"]::-webkit-slider-thumb {
   .charger-card { padding: 10px; }
   .charger-name { font-size: 0.85rem; }
 
-  .leaflet-bottom.leaflet-right { bottom: 80px !important; }
+  .leaflet-bottom.leaflet-right { bottom: 96px !important; }
 
-  #drawer-toggle { display: flex; align-items: center; justify-content: center; }
-  #drawer-toggle.open { display: none; }
+  #drawer-toggle { display: none !important; }
 }
