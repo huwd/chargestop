@@ -76,7 +76,17 @@ function socketTag(s: SocketType): string {
   return `<span class="tag ${cls}">${s}</span>`
 }
 
-export function buildChargerCard(charger: OsmElement, sockets: SocketType[]): HTMLElement {
+export interface StopSocInfo {
+  arrivalSocPercent: number
+  departureSocPercent: number
+  distanceAlongRouteKm: number
+}
+
+export function buildChargerCard(
+  charger: OsmElement,
+  sockets: SocketType[],
+  socInfo?: StopSocInfo,
+): HTMLElement {
   const name = charger.tags.name ?? charger.tags.operator ?? 'Charging Station'
   const network = charger.tags.network ?? charger.tags.operator ?? ''
   const card = document.createElement('div')
@@ -87,6 +97,15 @@ export function buildChargerCard(charger: OsmElement, sockets: SocketType[]): HT
     ? sockets.map(socketTag).join('')
     : '<span class="tag">AC/Unknown</span>'
 
+  const socRow = socInfo
+    ? `<div class="charger-soc">
+        <span class="soc-label">Arrive <b>${socInfo.arrivalSocPercent.toFixed(0)}%</b></span>
+        <span class="soc-sep">→</span>
+        <span class="soc-label">Depart <b>${socInfo.departureSocPercent.toFixed(0)}%</b></span>
+        <span class="soc-dist">${socInfo.distanceAlongRouteKm.toFixed(0)}km along route</span>
+      </div>`
+    : ''
+
   card.innerHTML = `
     <div class="charger-name">⚡ ${name}</div>
     <div class="charger-meta">
@@ -94,6 +113,7 @@ export function buildChargerCard(charger: OsmElement, sockets: SocketType[]): HT
       ${socketTags}
       <button class="add-to-route-btn" data-charger-id="${charger.id}" title="Add as waypoint">+ route</button>
     </div>
+    ${socRow}
     <div class="food-list" id="food-${charger.id}">
       <div class="food-searching">Click to search nearby food…</div>
     </div>`
