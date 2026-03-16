@@ -337,12 +337,37 @@ export function renderShareBar(
 
 // ─── Mobile drawer ───────────────────────────────────────────────────────────
 
+export interface DrawerControls {
+  goToPane: (idx: 0 | 1) => void
+  markResultsReady: () => void
+}
+
 export function initDrawer(
   sidebar: HTMLElement,
   toggleBtn: HTMLElement,
   header: HTMLElement,
   isMobile: () => boolean,
-): void {
+): DrawerControls {
+  const pagerEl = sidebar.querySelector<HTMLElement>('#sidebar-pager')
+  const dots = sidebar.querySelectorAll<HTMLElement>('.pager-dot')
+  const panes = [
+    sidebar.querySelector<HTMLElement>('#pane-plan'),
+    sidebar.querySelector<HTMLElement>('#pane-results'),
+  ] as const
+  let currentPane: 0 | 1 = 0
+
+  function goToPane(idx: 0 | 1): void {
+    if (!pagerEl || !isMobile()) return
+    currentPane = idx
+    pagerEl.style.transform = idx === 0 ? '' : 'translateX(-50%)'
+    dots.forEach((d, i) => d.classList.toggle('active', i === idx))
+  }
+
+  function markResultsReady(): void {
+    const resultsDot = dots[1]
+    if (resultsDot) resultsDot.classList.add('has-results')
+  }
+
   function setLabel(label: string): void {
     const span = toggleBtn.querySelector('.visually-hidden')
     if (span) span.textContent = label
@@ -372,11 +397,13 @@ export function initDrawer(
     if (isMobile()) toggle()
   })
 
-  // Swipe-to-close
+  // Swipe handling — horizontal swipes switch pane; vertical down-swipe closes
+  let touchStartX = 0
   let touchStartY = 0
   sidebar.addEventListener(
     'touchstart',
     (e) => {
+      touchStartX = e.touches[0].clientX
       touchStartY = e.touches[0].clientY
     },
     { passive: true },
@@ -384,11 +411,23 @@ export function initDrawer(
   sidebar.addEventListener(
     'touchend',
     (e) => {
-      // If the sidebar is scrolled down the user is swiping back up through
-      // content — don't interpret that as a close gesture.
-      if (sidebar.scrollTop > 0) return
-      if (e.changedTouches[0].clientY - touchStartY > 60 && isMobile()) close()
+      const dx = e.changedTouches[0].clientX - touchStartX
+      const dy = e.changedTouches[0].clientY - touchStartY
+      const absDx = Math.abs(dx)
+      const absDy = Math.abs(dy)
+
+      if (absDx > absDy && absDx > 40 && isMobile()) {
+        // Horizontal swipe — switch pane
+        if (dx < 0) goToPane(1)
+        else goToPane(0)
+      } else if (dy > 60 && isMobile()) {
+        // Vertical down-swipe — only close if current pane is scrolled to top
+        const activePaneEl = panes[currentPane]
+        if (!activePaneEl || activePaneEl.scrollTop === 0) close()
+      }
     },
     { passive: true },
   )
+
+  return { goToPane, markResultsReady }
 }

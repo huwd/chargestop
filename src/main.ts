@@ -21,6 +21,7 @@ import {
   populateVehiclePicker,
   renderWaypointList,
   renderShareBar,
+  type DrawerControls,
 } from './ui.ts'
 import { buildShareTitle } from './share.ts'
 import { parseUrlParams, buildUrlSearch } from './params.ts'
@@ -592,6 +593,9 @@ async function runPlan(): Promise<void> {
       onRefresh: (fresh) => renderChargers(fresh, true),
     })
     renderChargers(chargerData, false)
+    // Slide to results pane on mobile after first successful plan
+    drawer.markResultsReady()
+    drawer.goToPane(1)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     status(`Error: ${msg}`, 'err')
@@ -604,7 +608,12 @@ async function runPlan(): Promise<void> {
 
 // ─── Mobile drawer ────────────────────────────────────────────────────────────
 
-initDrawer(sidebar, drawerToggle, sidebarHeader, () => window.innerWidth <= 700)
+const drawer: DrawerControls = initDrawer(
+  sidebar,
+  drawerToggle,
+  sidebarHeader,
+  () => window.innerWidth <= 700,
+)
 
 planBtn.addEventListener('click', () => {
   if (window.innerWidth <= 700) setTimeout(() => sidebar.classList.add('open'), 300)
