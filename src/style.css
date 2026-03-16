@@ -693,17 +693,17 @@ input[type="range"]::-moz-range-thumb {
     display: flex;
     flex: 1;
     min-height: 0;
-    width: 200vw;
+    width: 200%;
     will-change: transform;
     transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
   }
 
   #pane-plan,
   #pane-results {
-    width: 100vw;
-    max-width: 100vw;
+    width: 50%;
     flex-shrink: 0;
     overflow-y: auto;
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
