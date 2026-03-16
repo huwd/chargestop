@@ -374,17 +374,24 @@ export function initDrawer(
 
   // Swipe-to-close
   let touchStartY = 0
+  let touchStartedInScrollable = false
+  const resultsEl = sidebar.querySelector('#results') as HTMLElement | null
   sidebar.addEventListener(
     'touchstart',
     (e) => {
       touchStartY = e.touches[0].clientY
+      touchStartedInScrollable = !!(resultsEl && resultsEl.contains(e.target as Node))
     },
     { passive: true },
   )
   sidebar.addEventListener(
     'touchend',
     (e) => {
-      if (e.changedTouches[0].clientY - touchStartY > 60 && isMobile()) close()
+      const dy = e.changedTouches[0].clientY - touchStartY
+      // Don't close if the swipe started inside the scrollable results area
+      // and the list is already scrolled down — the user is scrolling back up.
+      if (touchStartedInScrollable && resultsEl && resultsEl.scrollTop > 0) return
+      if (dy > 60 && isMobile()) close()
     },
     { passive: true },
   )
