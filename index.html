@@ -19,81 +19,71 @@
 
 <div id="sidebar">
   <div id="sidebar-header">
-    <div id="pager-dots" aria-hidden="true">
-      <span class="pager-dot active"></span>
-      <span class="pager-dot"></span>
-    </div>
     <h1>ChargeStop</h1>
     <p>EV fast charging + indie food, along any route</p>
   </div>
 
-  <div id="sidebar-pager">
-    <div id="pane-plan">
-      <div id="controls">
-        <div id="waypoints-section">
-          <div id="waypoints-list">
-            <!-- dynamically rendered by main.ts -->
-          </div>
-          <div id="waypoints-actions">
-            <button id="add-stop-btn" class="wp-action-btn">+ Add stop</button>
-            <button id="reverse-btn" class="wp-action-btn">⇅ Reverse</button>
-          </div>
-        </div>
-
-        <div class="field">
-          <label for="vehicle-select">Vehicle</label>
-          <select id="vehicle-select">
-            <option value="">No vehicle selected</option>
-          </select>
-        </div>
-
-        <div id="sliders-row">
-          <div class="slider-row">
-            <label for="detour-slider">Detour: <span id="detour-val">5</span>km</label>
-            <input type="range" id="detour-slider" min="1" max="25" value="5" step="1" aria-valuetext="5km">
-          </div>
-          <div class="slider-row">
-            <label for="food-slider">Food within: <span id="food-val">150</span>m</label>
-            <input type="range" id="food-slider" min="50" max="600" value="150" step="50" aria-valuetext="150m">
-          </div>
-          <div class="slider-row">
-            <label class="toggle-row">
-              <input type="checkbox" id="indie-toggle" checked>
-              Indie only
-            </label>
-          </div>
-        </div>
-
-        <button id="plan-btn">Plan Route</button>
+  <div id="controls">
+    <div id="waypoints-section">
+      <div id="waypoints-list">
+        <!-- dynamically rendered by main.ts -->
       </div>
-
-      <div id="status-bar" aria-live="polite" aria-atomic="true">
-        <div class="dot" id="status-dot"></div>
-        <span id="status-msg">Enter a route and click Plan</span>
-      </div>
-
-      <div id="plan-steps" aria-live="polite">
-        <div class="plan-step" id="step-geocode">
-          <span class="step-icon"></span><span class="step-label">Locating</span>
-        </div>
-        <div class="plan-step" id="step-route">
-          <span class="step-icon"></span><span class="step-label">Route</span>
-        </div>
-        <div class="plan-step" id="step-chargers">
-          <span class="step-icon"></span><span class="step-label">Chargers</span>
-        </div>
+      <div id="waypoints-actions">
+        <button id="add-stop-btn" class="wp-action-btn">+ Add stop</button>
+        <button id="reverse-btn" class="wp-action-btn">⇅ Reverse</button>
       </div>
     </div>
 
-    <div id="pane-results">
-      <div id="share-bar" hidden></div>
+    <div class="field">
+      <label for="vehicle-select">Vehicle</label>
+      <select id="vehicle-select">
+        <option value="">No vehicle selected</option>
+      </select>
+    </div>
 
-      <div id="results">
-        <div class="empty-state">
-          <div class="big">⚡</div>
-          <div>Plan a route to find<br>charger + food combos</div>
-        </div>
+    <div id="sliders-row">
+      <div class="slider-row">
+        <label for="detour-slider">Detour: <span id="detour-val">5</span>km</label>
+        <input type="range" id="detour-slider" min="1" max="25" value="5" step="1" aria-valuetext="5km">
       </div>
+      <div class="slider-row">
+        <label for="food-slider">Food within: <span id="food-val">150</span>m</label>
+        <input type="range" id="food-slider" min="50" max="600" value="150" step="50" aria-valuetext="150m">
+      </div>
+      <div class="slider-row">
+        <label class="toggle-row">
+          <input type="checkbox" id="indie-toggle" checked>
+          Indie only
+        </label>
+      </div>
+    </div>
+
+    <button id="plan-btn">Plan Route</button>
+  </div>
+
+  <div id="status-bar" aria-live="polite" aria-atomic="true">
+    <div class="dot" id="status-dot"></div>
+    <span id="status-msg">Enter a route and click Plan</span>
+  </div>
+
+  <div id="plan-steps" aria-live="polite">
+    <div class="plan-step" id="step-geocode">
+      <span class="step-icon"></span><span class="step-label">Locating</span>
+    </div>
+    <div class="plan-step" id="step-route">
+      <span class="step-icon"></span><span class="step-label">Route</span>
+    </div>
+    <div class="plan-step" id="step-chargers">
+      <span class="step-icon"></span><span class="step-label">Chargers</span>
+    </div>
+  </div>
+
+  <div id="share-bar" hidden></div>
+
+  <div id="results">
+    <div class="empty-state">
+      <div class="big">⚡</div>
+      <div>Plan a route to find<br>charger + food combos</div>
     </div>
   </div>
 </div>
