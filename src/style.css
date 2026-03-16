@@ -899,6 +899,7 @@ input[type='range']::-moz-range-thumb {
     max-height: 85dvh;
     transform: translateY(calc(100% - 88px));
     transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+    display: block; /* override flex — lets all content flow to natural height */
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding-bottom: env(safe-area-inset-bottom, 0px);
