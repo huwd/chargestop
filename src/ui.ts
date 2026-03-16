@@ -429,5 +429,27 @@ export function initDrawer(
     { passive: true },
   )
 
+  // Arrow-key control (mobile only; ignored when an interactive element has focus)
+  document.addEventListener('keydown', (e) => {
+    if (!isMobile()) return
+    const tag = (document.activeElement?.tagName ?? '').toLowerCase()
+    if (['input', 'select', 'textarea'].includes(tag)) return
+
+    const isOpen = sidebar.classList.contains('open')
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      open()
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      close()
+    } else if (e.key === 'ArrowLeft' && isOpen) {
+      e.preventDefault()
+      goToPane(0)
+    } else if (e.key === 'ArrowRight' && isOpen) {
+      e.preventDefault()
+      goToPane(1)
+    }
+  })
+
   return { goToPane, markResultsReady }
 }
