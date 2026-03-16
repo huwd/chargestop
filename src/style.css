@@ -645,7 +645,8 @@ input[type="range"]::-moz-range-thumb {
     max-height: 85dvh;
     transform: translateY(calc(100% - 88px));
     transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-    overflow: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
@@ -663,6 +664,11 @@ input[type="range"]::-moz-range-thumb {
     display: flex;
     flex-direction: column;
     align-items: center;
+    /* Stay visible at the top while the sidebar content scrolls */
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--panel);
   }
 
   /* Drag handle rendered inside the header so taps on it fire the
@@ -701,9 +707,6 @@ input[type="range"]::-moz-range-thumb {
 
   #results {
     padding: 10px 16px;
-    max-height: calc(80dvh - 220px);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
   }
 
   .charger-card { padding: 10px; }
