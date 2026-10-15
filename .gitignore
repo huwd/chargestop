@@ -3,7 +3,13 @@ node_modules/
 dist/
 .env
 .env.*
+!.env.example
 *.local
 coverage/
 playwright-report/
 test-results/
+
+# devenv / direnv
+.devenv*
+devenv.local.nix
+.direnv/
