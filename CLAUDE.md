@@ -102,8 +102,10 @@ changing the client architecture.
 
 ### Why not Google Maps?
 
-Cost and lock-in. OSM + Overpass + OSRM gives full control, zero API
-keys, and open data.
+Cost and lock-in. OSM + Overpass + OSRM gives full control and open data.
+The only key is the CARTO basemap key (`VITE_CARTO_API_KEY`): copy
+`.env.example` to `.env` locally; CI reads the `CARTO_API_KEY` GitHub secret.
+It ends up in the public bundle, so restrict it by domain in CARTO.
 
 ### Chain filtering
 

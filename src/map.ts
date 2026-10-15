@@ -2,15 +2,18 @@
 
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { tileUrl } from './tiles'
 
 export function initMap(elementId: string): L.Map {
   const map = L.map(elementId, { zoomControl: false }).setView([52.5, -2.5], 7)
   L.control.zoom({ position: 'bottomright' }).addTo(map)
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  const apiKey = import.meta.env.VITE_CARTO_API_KEY ?? ''
+  if (!apiKey) console.warn('VITE_CARTO_API_KEY is not set; basemap tiles will fail to load')
+
+  L.tileLayer(tileUrl(apiKey), {
     attribution: '© OpenStreetMap © CARTO',
     maxZoom: 19,
-    subdomains: 'abcd',
   }).addTo(map)
 
   return map
